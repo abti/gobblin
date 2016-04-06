@@ -23,7 +23,6 @@ buildscript {
 
 apply plugin: 'org.inferred.processors'
 apply plugin: 'idea'
-apply plugin: 'eclipse'
 
 apply from: rootProject.projectDir.path + '/gradle/scripts/jacoco-coveralls-support.gradle'
 
