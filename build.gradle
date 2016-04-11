@@ -500,7 +500,7 @@ subprojects {
     // an apparent bug in the plugin which doesn't set the outputDir/testOutputDir as documented
     idea.project {
       ext.languageLevel = JavaVersion.VERSION_1_7
-      languageLevel = JavaVersion.VERSION_1_7 
+      languageLevel = JavaVersion.VERSION_1_7
     }
     idea.module {
       // Gradle docs claim the two settings below are the default, but
