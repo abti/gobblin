@@ -34,8 +34,7 @@ import org.slf4j.LoggerFactory;
  */
 public class EmailSender {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(EmailUtils.class);
-  private static final int DEFAULT_SMTP_PORT = 0;
+  private static final Logger LOGGER = LoggerFactory.getLogger(EmailSender.class);
 
   private final String emailHost;
   private final Optional<Integer> smtpPort;
