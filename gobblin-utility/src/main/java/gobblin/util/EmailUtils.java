@@ -30,9 +30,11 @@ import gobblin.password.PasswordManager;
 
 /**
  * A utility class for sending emails.
+ * @Deprecated use {@link EmailSender} instead.
  *
  * @author Yinan Li
  */
+@Deprecated
 public class EmailUtils {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EmailUtils.class);
