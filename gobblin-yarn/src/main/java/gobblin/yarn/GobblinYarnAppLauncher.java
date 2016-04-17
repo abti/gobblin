@@ -12,58 +12,27 @@
 
 package gobblin.yarn;
 
+import gobblin.admin.AdminWebServer;
+import gobblin.configuration.ConfigurationKeys;
+import gobblin.rest.JobExecutionInfoServer;
+import gobblin.util.ConfigUtils;
+import gobblin.util.EmailSender;
+import gobblin.util.ExecutorsUtils;
+import gobblin.util.io.StreamUtils;
+import gobblin.util.logs.LogCopier;
+import gobblin.yarn.event.ApplicationReportArrivalEvent;
+import gobblin.yarn.event.GetApplicationReportFailureEvent;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.commons.mail.EmailException;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RawLocalFileSystem;
-import org.apache.hadoop.io.DataOutputBuffer;
-import org.apache.hadoop.security.Credentials;
-import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.security.token.Token;
-import org.apache.hadoop.yarn.api.ApplicationConstants;
-import org.apache.hadoop.yarn.api.protocolrecords.GetNewApplicationResponse;
-import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.apache.hadoop.yarn.api.records.ApplicationReport;
-import org.apache.hadoop.yarn.api.records.ApplicationResourceUsageReport;
-import org.apache.hadoop.yarn.api.records.ApplicationSubmissionContext;
-import org.apache.hadoop.yarn.api.records.ContainerLaunchContext;
-import org.apache.hadoop.yarn.api.records.FinalApplicationStatus;
-import org.apache.hadoop.yarn.api.records.LocalResource;
-import org.apache.hadoop.yarn.api.records.LocalResourceType;
-import org.apache.hadoop.yarn.api.records.Priority;
-import org.apache.hadoop.yarn.api.records.Resource;
-import org.apache.hadoop.yarn.api.records.YarnApplicationState;
-import org.apache.hadoop.yarn.client.api.YarnClient;
-import org.apache.hadoop.yarn.client.api.YarnClientApplication;
-import org.apache.hadoop.yarn.conf.YarnConfiguration;
-import org.apache.hadoop.yarn.exceptions.YarnException;
-import org.apache.hadoop.yarn.util.Records;
-
-import org.apache.helix.Criteria;
-import org.apache.helix.HelixManager;
-import org.apache.helix.HelixManagerFactory;
-import org.apache.helix.InstanceType;
-import org.apache.helix.model.Message;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
@@ -79,20 +48,33 @@ import com.google.common.io.Closer;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.ServiceManager;
-
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-
-import gobblin.admin.AdminWebServer;
-import gobblin.configuration.ConfigurationKeys;
-import gobblin.rest.JobExecutionInfoServer;
-import gobblin.util.ConfigUtils;
-import gobblin.util.EmailUtils;
-import gobblin.util.ExecutorsUtils;
-import gobblin.util.io.StreamUtils;
-import gobblin.util.logs.LogCopier;
-import gobblin.yarn.event.ApplicationReportArrivalEvent;
-import gobblin.yarn.event.GetApplicationReportFailureEvent;
+import org.apache.commons.mail.EmailException;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RawLocalFileSystem;
+import org.apache.hadoop.io.DataOutputBuffer;
+import org.apache.hadoop.security.Credentials;
+import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.yarn.api.ApplicationConstants;
+import org.apache.hadoop.yarn.api.protocolrecords.GetNewApplicationResponse;
+import org.apache.hadoop.yarn.api.records.*;
+import org.apache.hadoop.yarn.client.api.YarnClient;
+import org.apache.hadoop.yarn.client.api.YarnClientApplication;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
+import org.apache.hadoop.yarn.exceptions.YarnException;
+import org.apache.hadoop.yarn.util.Records;
+import org.apache.helix.Criteria;
+import org.apache.helix.HelixManager;
+import org.apache.helix.HelixManagerFactory;
+import org.apache.helix.InstanceType;
+import org.apache.helix.model.Message;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -190,6 +172,7 @@ public class GobblinYarnAppLauncher {
   private volatile boolean stopped = false;
 
   private final boolean emailNotificationOnShutdown;
+  private final Optional<EmailSender> emailSender;
 
   public GobblinYarnAppLauncher(Config config, YarnConfiguration yarnConfiguration) throws IOException {
     this.config = config;
@@ -228,6 +211,15 @@ public class GobblinYarnAppLauncher {
 
     this.emailNotificationOnShutdown =
         config.getBoolean(GobblinYarnConfigurationKeys.EMAIL_NOTIFICATION_ON_SHUTDOWN_KEY);
+
+    if (this.emailNotificationOnShutdown)
+    {
+      this.emailSender = Optional.of(new EmailSender(config));
+    }
+    else
+    {
+      this.emailSender = Optional.absent();
+    }
   }
 
   /**
@@ -763,7 +755,7 @@ public class GobblinYarnAppLauncher {
     }
 
     try {
-      EmailUtils.sendEmail(ConfigUtils.configToState(this.config), subject, messageBuilder.toString());
+      emailSender.get().sendEmail(subject, messageBuilder.toString());
     } catch (EmailException ee) {
       LOGGER.error("Failed to send email notification on shutdown", ee);
     }
