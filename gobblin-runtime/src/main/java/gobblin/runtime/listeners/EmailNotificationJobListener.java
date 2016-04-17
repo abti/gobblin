@@ -12,15 +12,15 @@
 
 package gobblin.runtime.listeners;
 
-import com.typesafe.config.Config;
-import gobblin.util.EmailSender;
-import org.apache.commons.mail.EmailException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import gobblin.configuration.ConfigurationKeys;
 import gobblin.runtime.JobContext;
 import gobblin.runtime.JobState;
+import gobblin.util.EmailSender;
+
+import com.typesafe.config.Config;
+import org.apache.commons.mail.EmailException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
