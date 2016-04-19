@@ -40,6 +40,7 @@ import com.google.common.io.Closer;
 
 import gobblin.configuration.ConfigurationKeys;
 import gobblin.configuration.State;
+import gobblin.metrics.GobblinMetrics;
 import gobblin.metrics.Tag;
 import gobblin.runtime.JobException;
 import gobblin.runtime.JobLauncher;
@@ -49,7 +50,6 @@ import gobblin.runtime.app.ApplicationLauncher;
 import gobblin.runtime.app.ServiceBasedAppLauncher;
 import gobblin.runtime.listeners.EmailNotificationJobListener;
 import gobblin.runtime.listeners.JobListener;
-import gobblin.runtime.util.JobMetrics;
 import gobblin.util.TimeRangeChecker;
 import gobblin.hadoop.token.TokenUtils;
 
@@ -91,8 +91,7 @@ public class AzkabanJobLauncher extends AbstractJob implements ApplicationLaunch
   private final Properties props;
   private final ApplicationLauncher applicationLauncher;
 
-  public AzkabanJobLauncher(String jobId, Properties props)
-      throws Exception {
+  public AzkabanJobLauncher(String jobId, Properties props) throws Exception {
     super(jobId, LOG);
 
     this.props = new Properties();
@@ -111,13 +110,14 @@ public class AzkabanJobLauncher extends AbstractJob implements ApplicationLaunch
     }
 
     // Set the job tracking URL to point to the Azkaban job execution link URL
-    this.props.setProperty(
-        ConfigurationKeys.JOB_TRACKING_URL_KEY, Strings.nullToEmpty(conf.get(AZKABAN_LINK_JOBEXEC_URL)));
+    this.props.setProperty(ConfigurationKeys.JOB_TRACKING_URL_KEY,
+        Strings.nullToEmpty(conf.get(AZKABAN_LINK_JOBEXEC_URL)));
 
     if (props.containsKey(JOB_TYPE) && JOB_TYPES_WITH_AUTOMATIC_TOKEN.contains(props.getProperty(JOB_TYPE))) {
       // Necessary for compatibility with Azkaban's hadoopJava job type
       // http://azkaban.github.io/azkaban/docs/2.5/#hadoopjava-type
-      LOG.info("Job type " + props.getProperty(JOB_TYPE) + " provides Hadoop tokens automatically. Using provided tokens.");
+      LOG.info(
+          "Job type " + props.getProperty(JOB_TYPE) + " provides Hadoop tokens automatically. Using provided tokens.");
       if (System.getenv(HADOOP_TOKEN_FILE_LOCATION) != null) {
         this.props.setProperty(MAPREDUCE_JOB_CREDENTIALS_BINARY, System.getenv(HADOOP_TOKEN_FILE_LOCATION));
       }
@@ -134,7 +134,7 @@ public class AzkabanJobLauncher extends AbstractJob implements ApplicationLaunch
 
     List<Tag<?>> tags = Lists.newArrayList();
     tags.addAll(Tag.fromMap(AzkabanTags.getAzkabanTags()));
-    JobMetrics.addCustomTagsToProperties(this.props, tags);
+    GobblinMetrics.addCustomTagsToProperties(this.props, tags);
 
     // If the job launcher type is not specified in the job configuration,
     // override the default to use the MAPREDUCE launcher.
@@ -152,12 +152,12 @@ public class AzkabanJobLauncher extends AbstractJob implements ApplicationLaunch
     this.jobListener = new EmailNotificationJobListener(config);
     // Since Java classes cannot extend multiple classes and Azkaban jobs must extend AbstractJob, we must use composition
     // verses extending ServiceBasedAppLauncher
-    this.applicationLauncher = this.closer.register(new ServiceBasedAppLauncher(this.props, "Azkaban-" + UUID.randomUUID()));
+    this.applicationLauncher =
+        this.closer.register(new ServiceBasedAppLauncher(this.props, "Azkaban-" + UUID.randomUUID()));
   }
 
   @Override
-  public void run()
-      throws Exception {
+  public void run() throws Exception {
     if (isCurrentTimeInRange()) {
       try {
         start();
@@ -173,8 +173,7 @@ public class AzkabanJobLauncher extends AbstractJob implements ApplicationLaunch
   }
 
   @Override
-  public void cancel()
-      throws Exception {
+  public void cancel() throws Exception {
     try {
       cancelJob(this.jobListener);
     } finally {

@@ -27,7 +27,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import com.google.common.io.BaseEncoding;
-import com.google.common.io.Closer;
 
 import gobblin.configuration.State;
 
@@ -63,17 +62,11 @@ public class SerializationUtils {
    * @throws IOException if it fails to serialize the object
    */
   public static <T extends Serializable> String serialize(T obj, BaseEncoding enc) throws IOException {
-    Closer closer = Closer.create();
-    try {
-      ByteArrayOutputStream bos = closer.register(new ByteArrayOutputStream());
-      ObjectOutputStream oos = closer.register(new ObjectOutputStream(bos));
+    try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos)) {
       oos.writeObject(obj);
       oos.flush();
       return enc.encode(bos.toByteArray());
-    } catch (Throwable e) {
-      throw closer.rethrow(e);
-    } finally {
-      closer.close();
     }
   }
 
@@ -102,15 +95,11 @@ public class SerializationUtils {
    */
   public static <T extends Serializable> T deserialize(String serialized, Class<T> clazz, BaseEncoding enc)
       throws IOException {
-    Closer closer = Closer.create();
-    try {
-      ByteArrayInputStream bis = closer.register(new ByteArrayInputStream(enc.decode(serialized)));
-      ObjectInputStream ois = closer.register(new ObjectInputStream(bis));
+    try (ByteArrayInputStream bis = new ByteArrayInputStream(enc.decode(serialized));
+        ObjectInputStream ois = new ObjectInputStream(bis)) {
       return clazz.cast(ois.readObject());
-    } catch (Throwable e) {
-      throw closer.rethrow(e);
-    } finally {
-      closer.close();
+    } catch (ClassNotFoundException e) {
+      throw new IOException(e);
     }
   }
 
@@ -138,18 +127,11 @@ public class SerializationUtils {
    * @param <T> the {@link State} object type
    * @throws IOException if it fails to serialize the {@link State} instance
    */
-  public static <T extends State> void serializeState(FileSystem fs, Path jobStateFilePath, T state, int replication)
+  public static <T extends State> void serializeState(FileSystem fs, Path jobStateFilePath, T state, short replication)
       throws IOException {
-    Closer closer = Closer.create();
-
-    try {
-      OutputStream os = closer.register(fs.create(jobStateFilePath, true, replication));
-      DataOutputStream dataOutputStream = closer.register(new DataOutputStream(os));
+    try (OutputStream os = fs.create(jobStateFilePath, replication);
+        DataOutputStream dataOutputStream = new DataOutputStream(os)) {
       state.write(dataOutputStream);
-    } catch (Throwable t) {
-      throw closer.rethrow(t);
-    } finally {
-      closer.close();
     }
   }
 
@@ -164,16 +146,23 @@ public class SerializationUtils {
    */
   public static <T extends State> void deserializeState(FileSystem fs, Path jobStateFilePath, T state)
       throws IOException {
-    Closer closer = Closer.create();
+    try (InputStream is = fs.open(jobStateFilePath)) {
+      deserializeStateFromInputStream(is, state);
+    }
+  }
 
-    try {
-      InputStream is = closer.register(fs.open(jobStateFilePath));
-      DataInputStream dis = closer.register((new DataInputStream(is)));
+  /**
+   * Deserialize/read a {@link State} instance from a file.
+   *
+   * @param is {@link InputStream} containing the state.
+   * @param state an empty {@link State} instance to deserialize into
+   * @param <T> the {@link State} object type
+   * @throws IOException if it fails to deserialize the {@link State} instance
+   */
+  public static <T extends State> void deserializeStateFromInputStream(InputStream is, T state)
+      throws IOException {
+    try (DataInputStream dis = (new DataInputStream(is))) {
       state.readFields(dis);
-    } catch (Throwable t) {
-      throw closer.rethrow(t);
-    } finally {
-      closer.close();
     }
   }
 }
