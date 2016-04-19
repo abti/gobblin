@@ -14,20 +14,21 @@
 
 package gobblin.util;
 
-import gobblin.configuration.ConfigurationKeys;
-import gobblin.password.PasswordManager;
-
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-import com.google.common.base.Optional;
-import com.google.common.base.Splitter;
-import com.typesafe.config.Config;
 import org.apache.commons.mail.Email;
 import org.apache.commons.mail.EmailException;
 import org.apache.commons.mail.SimpleEmail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Optional;
+import com.google.common.base.Splitter;
+import com.typesafe.config.Config;
+
+import gobblin.configuration.ConfigurationKeys;
+import gobblin.password.PasswordManager;
 
 /**
  * A helper class for sending emails.

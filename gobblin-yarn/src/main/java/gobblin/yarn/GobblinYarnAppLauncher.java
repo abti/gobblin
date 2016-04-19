@@ -12,17 +12,6 @@
 
 package gobblin.yarn;
 
-import gobblin.admin.AdminWebServer;
-import gobblin.configuration.ConfigurationKeys;
-import gobblin.rest.JobExecutionInfoServer;
-import gobblin.util.ConfigUtils;
-import gobblin.util.EmailSender;
-import gobblin.util.ExecutorsUtils;
-import gobblin.util.io.StreamUtils;
-import gobblin.util.logs.LogCopier;
-import gobblin.yarn.event.ApplicationReportArrivalEvent;
-import gobblin.yarn.event.GetApplicationReportFailureEvent;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -39,22 +28,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Optional;
-import com.google.common.base.Splitter;
-import com.google.common.base.Strings;
-import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.eventbus.EventBus;
-import com.google.common.eventbus.Subscribe;
-import com.google.common.io.Closer;
-import com.google.common.util.concurrent.ListeningExecutorService;
-import com.google.common.util.concurrent.Service;
-import com.google.common.util.concurrent.ServiceManager;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 import org.apache.commons.mail.EmailException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -90,6 +63,34 @@ import org.apache.helix.InstanceType;
 import org.apache.helix.model.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Optional;
+import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
+import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.eventbus.EventBus;
+import com.google.common.eventbus.Subscribe;
+import com.google.common.io.Closer;
+import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.Service;
+import com.google.common.util.concurrent.ServiceManager;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
+
+import gobblin.admin.AdminWebServer;
+import gobblin.configuration.ConfigurationKeys;
+import gobblin.rest.JobExecutionInfoServer;
+import gobblin.util.ConfigUtils;
+import gobblin.util.EmailSender;
+import gobblin.util.ExecutorsUtils;
+import gobblin.util.io.StreamUtils;
+import gobblin.util.logs.LogCopier;
+import gobblin.yarn.event.ApplicationReportArrivalEvent;
+import gobblin.yarn.event.GetApplicationReportFailureEvent;
 
 
 /**
@@ -227,14 +228,10 @@ public class GobblinYarnAppLauncher {
     this.emailNotificationOnShutdown =
         config.getBoolean(GobblinYarnConfigurationKeys.EMAIL_NOTIFICATION_ON_SHUTDOWN_KEY);
 
-    if (this.emailNotificationOnShutdown)
-    {
-      this.emailSender = Optional.of(new EmailSender(config));
-    }
-    else
-    {
-      this.emailSender = Optional.absent();
-    }
+    this.emailSender = this.emailNotificationOnShutdown ?
+        Optional.of(new EmailSender(config))
+        :Optional.<EmailSender>absent();
+
   }
 
   /**
@@ -770,7 +767,12 @@ public class GobblinYarnAppLauncher {
     }
 
     try {
-      emailSender.get().sendEmail(subject, messageBuilder.toString());
+      if (emailSender.isPresent()) {
+        emailSender.get().sendEmail(subject, messageBuilder.toString());
+      }
+      else {
+        LOGGER.warn("Not sending email notification on shutdown, valid email sender was not found");
+      }
     } catch (EmailException ee) {
       LOGGER.error("Failed to send email notification on shutdown", ee);
     }
