@@ -55,6 +55,8 @@ import com.google.common.collect.Sets;
 import com.google.common.io.Closer;
 import com.google.common.io.Files;
 import com.google.common.util.concurrent.AbstractIdleService;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 import gobblin.configuration.ConfigurationKeys;
 import gobblin.runtime.JobException;
@@ -365,7 +367,8 @@ public class JobScheduler extends AbstractIdleService {
     LOG.info("Scheduling locally configured jobs");
     for (Properties jobProps : loadLocalJobConfigs()) {
       boolean runOnce = Boolean.valueOf(jobProps.getProperty(ConfigurationKeys.JOB_RUN_ONCE_KEY, "false"));
-      scheduleJob(jobProps, runOnce ? new RunOnceJobListener() : new EmailNotificationJobListener());
+      Config config = ConfigFactory.parseProperties(jobProps);
+      scheduleJob(jobProps, runOnce ? new RunOnceJobListener() : new EmailNotificationJobListener(config));
     }
   }
 
@@ -420,8 +423,9 @@ public class JobScheduler extends AbstractIdleService {
         try {
           LOG.info("Detected new job configuration file " + file.getAbsolutePath());
           Properties jobProps = SchedulerUtils.loadJobConfig(properties, file, jobConfigFileDir);
+          Config config = ConfigFactory.parseProperties(jobProps);
           boolean runOnce = Boolean.valueOf(jobProps.getProperty(ConfigurationKeys.JOB_RUN_ONCE_KEY, "false"));
-          scheduleJob(jobProps, runOnce ? new RunOnceJobListener() : new EmailNotificationJobListener());
+          scheduleJob(jobProps, runOnce ? new RunOnceJobListener() : new EmailNotificationJobListener(config));
         } catch (ConfigurationException | IOException e) {
           LOG.error("Failed to load from job configuration file " + file.getAbsolutePath(), e);
         } catch (JobException je) {
@@ -470,12 +474,13 @@ public class JobScheduler extends AbstractIdleService {
       }
 
       private void rescheduleJob(Properties jobProps) throws JobException {
+        Config config = ConfigFactory.parseProperties(jobProps);
         String jobName = jobProps.getProperty(ConfigurationKeys.JOB_NAME_KEY);
         // First unschedule and delete the old job
         unscheduleJob(jobName);
         boolean runOnce = Boolean.valueOf(jobProps.getProperty(ConfigurationKeys.JOB_RUN_ONCE_KEY, "false"));
         // Reschedule the job with the new job configuration
-        scheduleJob(jobProps, runOnce ? new RunOnceJobListener() : new EmailNotificationJobListener());
+        scheduleJob(jobProps, runOnce ? new RunOnceJobListener() : new EmailNotificationJobListener(config));
       }
     };
 
