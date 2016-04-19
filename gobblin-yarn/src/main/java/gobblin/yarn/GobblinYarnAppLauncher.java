@@ -56,7 +56,6 @@ import org.apache.hadoop.yarn.client.api.YarnClientApplication;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.Records;
-
 import org.apache.helix.Criteria;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
@@ -79,7 +78,6 @@ import com.google.common.io.Closer;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.ServiceManager;
-
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -87,7 +85,7 @@ import gobblin.admin.AdminWebServer;
 import gobblin.configuration.ConfigurationKeys;
 import gobblin.rest.JobExecutionInfoServer;
 import gobblin.util.ConfigUtils;
-import gobblin.util.EmailUtils;
+import gobblin.util.EmailSender;
 import gobblin.util.ExecutorsUtils;
 import gobblin.util.io.StreamUtils;
 import gobblin.util.logs.LogCopier;
@@ -190,6 +188,7 @@ public class GobblinYarnAppLauncher {
   private volatile boolean stopped = false;
 
   private final boolean emailNotificationOnShutdown;
+  private final Optional<EmailSender> emailSender;
 
   public GobblinYarnAppLauncher(Config config, YarnConfiguration yarnConfiguration) throws IOException {
     this.config = config;
@@ -228,6 +227,11 @@ public class GobblinYarnAppLauncher {
 
     this.emailNotificationOnShutdown =
         config.getBoolean(GobblinYarnConfigurationKeys.EMAIL_NOTIFICATION_ON_SHUTDOWN_KEY);
+
+    this.emailSender = this.emailNotificationOnShutdown ?
+        Optional.of(new EmailSender(config))
+        :Optional.<EmailSender>absent();
+
   }
 
   /**
@@ -762,7 +766,12 @@ public class GobblinYarnAppLauncher {
     }
 
     try {
-      EmailUtils.sendEmail(ConfigUtils.configToState(this.config), subject, messageBuilder.toString());
+      if (emailSender.isPresent()) {
+        emailSender.get().sendEmail(subject, messageBuilder.toString());
+      }
+      else {
+        LOGGER.warn("Not sending email notification on shutdown, valid email sender was not found");
+      }
     } catch (EmailException ee) {
       LOGGER.error("Failed to send email notification on shutdown", ee);
     }

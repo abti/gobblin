@@ -23,6 +23,8 @@ import javax.annotation.Nullable;
 
 import azkaban.jobExecutor.AbstractJob;
 
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.Logger;
 
@@ -85,7 +87,7 @@ public class AzkabanJobLauncher extends AbstractJob implements ApplicationLaunch
 
   private final Closer closer = Closer.create();
   private final JobLauncher jobLauncher;
-  private final JobListener jobListener = new EmailNotificationJobListener();
+  private final JobListener jobListener;
   private final Properties props;
   private final ApplicationLauncher applicationLauncher;
 
@@ -146,6 +148,8 @@ public class AzkabanJobLauncher extends AbstractJob implements ApplicationLaunch
     // properties in the .job file and in the .properties file into the same Properties object.
     this.jobLauncher = this.closer.register(JobLauncherFactory.newJobLauncher(this.props, this.props));
 
+    Config config = ConfigFactory.parseProperties(this.props);
+    this.jobListener = new EmailNotificationJobListener(config);
     // Since Java classes cannot extend multiple classes and Azkaban jobs must extend AbstractJob, we must use composition
     // verses extending ServiceBasedAppLauncher
     this.applicationLauncher =

@@ -12,14 +12,15 @@
 
 package gobblin.runtime.listeners;
 
-import org.apache.commons.mail.EmailException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import gobblin.configuration.ConfigurationKeys;
 import gobblin.runtime.JobContext;
 import gobblin.runtime.JobState;
-import gobblin.util.EmailUtils;
+import gobblin.util.EmailSender;
+
+import com.typesafe.config.Config;
+import org.apache.commons.mail.EmailException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -30,6 +31,13 @@ import gobblin.util.EmailUtils;
 public class EmailNotificationJobListener extends AbstractJobListener {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EmailNotificationJobListener.class);
+
+  private final EmailSender emailSender;
+
+  public EmailNotificationJobListener(Config config)
+  {
+    emailSender = new EmailSender(config);
+  }
 
   @Override
   public void onJobCompletion(JobContext jobContext) {
@@ -46,7 +54,7 @@ public class EmailNotificationJobListener extends AbstractJobListener {
           jobState.getPropAsInt(ConfigurationKeys.JOB_MAX_FAILURES_KEY, ConfigurationKeys.DEFAULT_JOB_MAX_FAILURES);
       if (alertEmailEnabled && failures >= maxFailures) {
         try {
-          EmailUtils.sendJobFailureAlertEmail(jobState.getJobName(), jobState.toString(), failures, jobState);
+          emailSender.sendJobFailureAlertEmail(jobState.getJobName(), jobState.toString(), failures);
         } catch (EmailException ee) {
           LOGGER.error("Failed to send job failure alert email for job " + jobState.getJobId(), ee);
         }
@@ -56,8 +64,8 @@ public class EmailNotificationJobListener extends AbstractJobListener {
 
     if (notificationEmailEnabled) {
       try {
-        EmailUtils.sendJobCompletionEmail(
-            jobState.getJobId(), jobState.toString(), jobState.getState().toString(), jobState);
+        emailSender.sendJobCompletionEmail(
+            jobState.getJobId(), jobState.toString(), jobState.getState().toString());
       } catch (EmailException ee) {
         LOGGER.error("Failed to send job completion notification email for job " + jobState.getJobId(), ee);
       }
@@ -72,7 +80,7 @@ public class EmailNotificationJobListener extends AbstractJobListener {
 
     if (notificationEmailEnabled) {
       try {
-        EmailUtils.sendJobCancellationEmail(jobState.getJobId(), jobState.toString(), jobState);
+        emailSender.sendJobCancellationEmail(jobState.getJobId(), jobState.toString());
       } catch (EmailException ee) {
         LOGGER.error("Failed to send job cancellation notification email for job " + jobState.getJobId(), ee);
       }
