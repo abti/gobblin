@@ -18,10 +18,6 @@ import org.slf4j.LoggerFactory;
 
 import com.typesafe.config.Config;
 
-import gobblin.configuration.ConfigurationKeys;
-import gobblin.runtime.JobContext;
-import gobblin.runtime.JobState;
-import gobblin.util.EmailSender;
 
 
 /**
