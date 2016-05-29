@@ -31,10 +31,15 @@ Gobblin also allows you to specify a global configuration file that contains com
   * [JsonIntermediateToAvroConverter Properties](#JsonIntermediateToAvroConverter-Properties)  
   * [AvroFilterConverter Properties](#AvroFilterConverter-Properties)  
   * [AvroFieldRetrieverConverter Properties](#AvroFieldRetrieverConverter-Properties)  
+  * [AvroFieldsPickConverter Properties](#AvroFieldsPickConverter-Properties)  
+  * [AvroToJdbcEntryConverter Properties](#AvroToJdbcEntryConverter-Properties)  
 * [Quality Checker Properties](#Quality-Checker-Properties)  
 * [Writer Properties](#Writer-Properties)  
 * [Data Publisher Properties](#Data-Publisher-Properties)  
 * [Generic Properties](#Generic-Properties)  
+* [FileBasedJobLock Properties](#FileBasedJobLock-Properties)
+* [ZookeeperBasedJobLock Properties](#ZookeeperBasedJobLock-Properties)
+* [JDBC Writer Properties](#JdbcWriter-Properties)
 
 # Properties File Format <a name="Properties-File-Format"></a>
 
@@ -99,18 +104,22 @@ A description of what the jobs does.
 None
 ###### Required
 No
-#### job.lock.dir
-###### Description
-Directory where job locks are stored. Job locks are used by the scheduler to ensure two executions of a job do not run at the same time. If a job is scheduled to run, Gobblin will first check this directory to see if there is a lock file for the job. If there is one, it will not run the job, if there isn't one then it will run the job.
-###### Default Value
-None
-###### Required
-No
 #### job.lock.enabled
 ###### Description
 If set to true job locks are enabled, if set to false they are disabled
 ###### Default Value
 True
+###### Required
+No
+#### job.lock.type
+##### Description
+The fully qualified name of the JobLock class to run. The JobLock is responsible for ensuring that only a single instance of a job runs at a time.
+###### Default Value
+`gobblin.runtime.locks.FileBasedJobLock`
+###### Allowed Values
+* [gobblin.runtime.locks.FileBasedJobLock](#FileBasedJobLock-Properties)
+* [gobblin.runtime.locks.ZookeeperBasedJobLock](#ZookeeperBasedJobLock-Properties)
+
 ###### Required
 No
 #### job.runonce 
@@ -191,6 +200,13 @@ No
 #### job.jars 
 ###### Description
 Comma-separated list of jar files the job depends on. These jars will be added to the classpath of the job, and to the classpath of any containers the job launches.
+###### Default Value
+None
+###### Required
+No
+#### job.hdfs.jars 
+###### Description
+Comma-separated list of jar files the job depends on located in HDFS. These jars will be added to the classpath of the job, and to the classpath of any containers the job launches.
 ###### Default Value
 None
 ###### Required
@@ -865,6 +881,24 @@ The field in the Avro record to retrieve. If it is a nested field, then each lev
 None
 ###### Required
 Yes
+## AvroFieldsPickConverter Properties <a name="AvroFieldsPickConverter-Properties"></a>
+Unlike AvroFieldRetriever, this converter takes multiple fields from Avro schema and convert schema and generic record.
+#### converter.avro.fields
+###### Description
+Comma-separted list of the fields in the Avro record. If it is a nested field, then each level must be separated by a period.
+###### Default Value
+None
+###### Required
+Yes
+## AvroToJdbcEntryConverter Properties <a name="AvroToJdbcEntryConverter-Properties"></a>
+Converts Avro schema and generic record into Jdbc entry schema and data.
+#### converter.avro.jdbc.entry_fields_pairs
+###### Description
+Converts Avro field name(s) to fit for JDBC underlying data base. Input format is key value pairs of JSON array where key is avro field name and value is corresponding JDBC column name.
+###### Default Value
+None
+###### Required
+No
 # Fork Properties <a name="Fork-Properties"></a>
 Properties for Gobblin's fork operator.
 #### fork.operator.class 
@@ -1054,5 +1088,154 @@ These properties are used throughout multiple Gobblin components.
 Default file system URI for all file storage; over-writable by more specific configuration properties.
 ###### Default Value
 file:///
+###### Required
+No
+# FileBasedJobLock Properties <a name="FileBasedJobLock-Properties"></a>
+#### job.lock.dir
+###### Description
+Directory where job locks are stored. Job locks are used by the scheduler to ensure two executions of a job do not run at the same time. If a job is scheduled to run, Gobblin will first check this directory to see if there is a lock file for the job. If there is one, it will not run the job, if there isn't one then it will run the job.
+###### Default Value
+None
+###### Required
+No
+# ZookeeperBasedJobLock Properties <a name="ZookeeperBasedJobLock-Properties"></a>
+#### zookeeper.connection.string
+###### Description
+The connection string to the ZooKeeper cluster used to manage the lock.
+###### Default Value
+localhost:2181
+###### Required
+No
+#### zookeeper.session.timeout.seconds
+###### Description
+The zookeeper session timeout.
+###### Default Value
+180
+###### Required
+No
+#### zookeeper.connection.timeout.seconds
+###### Description
+The zookeeper conection timeout.
+###### Default Value
+30
+###### Required
+No
+#### zookeeper.retry.backoff.seconds
+###### Description
+The amount of time in seconds to wait between retries.  This will increase exponentially when retries occur.
+###### Default Value
+1
+###### Required
+No
+#### zookeeper.retry.count.max
+###### Description
+The maximum number of times to retry.
+###### Default Value
+10
+###### Required
+No
+#### zookeeper.locks.acquire.timeout.milliseconds
+###### Description
+The amount of time in milliseconds to wait while attempting to acquire the lock.
+###### Default Value
+5000
+###### Required
+No
+#### zookeeper.locks.reaper.threshold.seconds
+###### Description
+The threshold in seconds that determines when a lock path can be deleted.
+###### Default Value
+300
+###### Required
+No
+
+# JDBC Writer properties <a name="JdbcWriter-Properties"></a>
+Writer(and publisher) that writes to JDBC database. Please configure below two properties to use JDBC writer & publisher.
+
+*  writer.builder.class=gobblin.writer.JdbcWriterBuilder
+*  data.publisher.type=gobblin.publisher.JdbcPublisher
+
+#### jdbc.publisher.database_name
+###### Description
+Destination database name
+###### Default Value
+None
+###### Required
+Yes
+#### jdbc.publisher.table_name
+###### Description
+Destination table name
+###### Default Value
+None
+###### Required
+Yes
+#### jdbc.publisher.replace_table
+###### Description
+Gobblin will replace the data in destination table.
+###### Default Value
+false
+###### Required
+No
+#### jdbc.publisher.username
+###### Description
+User name to connect to destination database
+###### Default Value
+None
+###### Required
+Yes
+#### jdbc.publisher.password
+###### Description
+Password to connect to destination database. Also, accepts encrypted password.
+###### Default Value
+None
+###### Required
+Yes
+#### jdbc.publisher.encrypt_key_loc
+###### Description
+Location of a key to decrypt an encrypted password
+###### Default Value
+None
+###### Required
+No
+#### jdbc.publisher.url
+###### Description
+Connection URL
+###### Default Value
+None
+###### Required
+Yes
+#### jdbc.publisher.driver
+###### Description
+JDBC driver class 
+###### Default Value
+None
+###### Required
+Yes
+#### writer.staging.table
+###### Description
+User can pass staging table for Gobblin to use instead of Gobblin to create one. (e.g: For the user who does not have create table previlege can pass staging table for Gobblin to use).
+###### Default Value
+None
+###### Required
+No
+#### writer.truncate.staging.table
+###### Description
+Truncate staging table if user passed their own staging table via "writer.staging.table".
+###### Default Value
+false
+###### Required
+No
+#### writer.jdbc.batch_size
+###### Description
+Batch size for Insert operation
+###### Default Value
+30
+###### Required
+No
+#### writer.jdbc.insert_max_param_size
+###### Description
+Maximum number of parameters for JDBC insert operation.
+###### Default Value
+100,000 (MySQL limitation)
 ###### Required
 No

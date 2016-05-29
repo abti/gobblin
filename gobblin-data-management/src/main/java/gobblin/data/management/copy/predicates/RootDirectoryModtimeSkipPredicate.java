@@ -13,16 +13,11 @@
 package gobblin.data.management.copy.predicates;
 
 import java.io.IOException;
-import java.util.concurrent.ExecutionException;
-
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.ql.metadata.Partition;
-
 import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
 
-import gobblin.data.management.copy.CopyContext;
 import gobblin.data.management.copy.hive.HiveCopyEntityHelper;
 import gobblin.util.PathUtils;
 
@@ -38,27 +33,31 @@ import lombok.extern.slf4j.Slf4j;
  */
 @AllArgsConstructor
 @Slf4j
-public class RootDirectoryModtimeSkipPredicate implements Predicate<Partition> {
+public class RootDirectoryModtimeSkipPredicate implements Predicate<HiveCopyEntityHelper.PartitionCopy> {
 
-  private HiveCopyEntityHelper helper;
+  private final HiveCopyEntityHelper helper;
 
   @Override
-  public boolean apply(@Nullable Partition input) {
+  public boolean apply(@Nullable HiveCopyEntityHelper.PartitionCopy input) {
 
     if (input == null) {
       return true;
     }
 
+    if (!input.getExistingTargetPartition().isPresent()) {
+      return false;
+    }
+
     try {
 
-      if (PathUtils.isGlob(input.getDataLocation())) {
-        log.error(String.format("%s cannot be applied to globbed location %s. Will not skip.", this.getClass().getSimpleName(),
-            input.getDataLocation()));
+      if (PathUtils.isGlob(input.getPartition().getDataLocation())) {
+        log.error(String.format("%s cannot be applied to globbed location %s. Will not skip.",
+            this.getClass().getSimpleName(), input.getPartition().getDataLocation()));
         return false;
       }
 
-      Path targetPath = this.helper.getTargetFileSystem().makeQualified(
-          this.helper.getTargetPath(input.getDataLocation(), this.helper.getTargetFs(), Optional.of(input), false));
+      Path targetPath = this.helper.getTargetFileSystem().makeQualified(this.helper.getTargetPathHelper().getTargetPath(
+          input.getPartition().getDataLocation(), this.helper.getTargetFs(), Optional.of(input.getPartition()), false));
 
       Optional<FileStatus> targetFileStatus =
           this.helper.getConfiguration().getCopyContext().getFileStatus(this.helper.getTargetFs(), targetPath);
@@ -67,12 +66,12 @@ public class RootDirectoryModtimeSkipPredicate implements Predicate<Partition> {
         return false;
       }
 
-      Optional<FileStatus> sourceFileStatus = this.helper.getConfiguration().getCopyContext().
-          getFileStatus(this.helper.getDataset().getFs(), input.getDataLocation());
-
+      Optional<FileStatus> sourceFileStatus = this.helper.getConfiguration().getCopyContext()
+          .getFileStatus(this.helper.getDataset().getFs(), input.getPartition().getDataLocation());
 
       if (!sourceFileStatus.isPresent()) {
-        throw new RuntimeException(String.format("Source path %s does not exist!", input.getDataLocation()));
+        throw new RuntimeException(
+            String.format("Source path %s does not exist!", input.getPartition().getDataLocation()));
       }
 
       return targetFileStatus.get().getModificationTime() > sourceFileStatus.get().getModificationTime();

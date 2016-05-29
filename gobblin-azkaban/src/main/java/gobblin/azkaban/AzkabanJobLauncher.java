@@ -51,7 +51,7 @@ import gobblin.runtime.app.ServiceBasedAppLauncher;
 import gobblin.runtime.listeners.EmailNotificationJobListener;
 import gobblin.runtime.listeners.JobListener;
 import gobblin.util.TimeRangeChecker;
-import gobblin.hadoop.token.TokenUtils;
+import gobblin.util.hadoop.TokenUtils;
 
 import static org.apache.hadoop.security.UserGroupInformation.HADOOP_TOKEN_FILE_LOCATION;
 
@@ -83,7 +83,8 @@ public class AzkabanJobLauncher extends AbstractJob implements ApplicationLaunch
 
   private static final String HADOOP_JAVA_JOB = "hadoopJava";
   private static final String JAVA_JOB = "java";
-  private static final Set<String> JOB_TYPES_WITH_AUTOMATIC_TOKEN = Sets.newHashSet(HADOOP_JAVA_JOB, JAVA_JOB);
+  private static final String GOBBLIN_JOB = "gobblin";
+  private static final Set<String> JOB_TYPES_WITH_AUTOMATIC_TOKEN = Sets.newHashSet(HADOOP_JAVA_JOB, JAVA_JOB, GOBBLIN_JOB);
 
   private final Closer closer = Closer.create();
   private final JobLauncher jobLauncher;

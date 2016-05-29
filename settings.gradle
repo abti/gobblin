@@ -24,10 +24,3 @@ modules.each { module ->
     }
   }
 }
-
-if (useHadoop2) {
-  include "gobblin-hadoop2"
-  include "gobblin-yarn"
-} else {
-  include "gobblin-hadoop1"
-}

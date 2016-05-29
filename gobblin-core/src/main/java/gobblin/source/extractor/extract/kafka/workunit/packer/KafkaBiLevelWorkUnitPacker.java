@@ -46,7 +46,7 @@ import gobblin.source.workunit.WorkUnit;
  * if we pack lots of partitions of the same topic to the same mapper, and we underestimate the avg time per record
  * for this topic, then this mapper could be much slower than other mappers.
  *
- * @author ziliu
+ * @author Ziyang Liu
  */
 public class KafkaBiLevelWorkUnitPacker extends KafkaWorkUnitPacker {
 
@@ -60,7 +60,7 @@ public class KafkaBiLevelWorkUnitPacker extends KafkaWorkUnitPacker {
   @Override
   public List<WorkUnit> pack(Map<String, List<WorkUnit>> workUnitsByTopic, int numContainers) {
     double totalEstDataSize = setWorkUnitEstSizes(workUnitsByTopic);
-    double avgGroupSize = totalEstDataSize / (double) numContainers / getPreGroupingSizeFactor(this.state);
+    double avgGroupSize = totalEstDataSize / numContainers / getPreGroupingSizeFactor(this.state);
 
     List<MultiWorkUnit> mwuGroups = Lists.newArrayList();
     for (List<WorkUnit> workUnitsForTopic : workUnitsByTopic.values()) {
@@ -79,7 +79,7 @@ public class KafkaBiLevelWorkUnitPacker extends KafkaWorkUnitPacker {
       }
     }
 
-    List<WorkUnit> groups = squeezeMultiWorkUnits(mwuGroups, this.state);
+    List<WorkUnit> groups = squeezeMultiWorkUnits(mwuGroups);
     return worstFitDecreasingBinPacking(groups, numContainers);
   }
 
@@ -104,7 +104,7 @@ public class KafkaBiLevelWorkUnitPacker extends KafkaWorkUnitPacker {
     // Sort workunits by data size desc
     Collections.sort(workUnits, LOAD_DESC_COMPARATOR);
 
-    PriorityQueue<MultiWorkUnit> pQueue = new PriorityQueue<MultiWorkUnit>(workUnits.size(), LOAD_DESC_COMPARATOR);
+    PriorityQueue<MultiWorkUnit> pQueue = new PriorityQueue<>(workUnits.size(), LOAD_DESC_COMPARATOR);
     for (WorkUnit workUnit : workUnits) {
       MultiWorkUnit bestGroup = findAndPopBestFitGroup(workUnit, pQueue, avgGroupSize);
       if (bestGroup != null) {
@@ -134,9 +134,8 @@ public class KafkaBiLevelWorkUnitPacker extends KafkaWorkUnitPacker {
       if (getWorkUnitEstSize(candidate) + getWorkUnitEstSize(workUnit) <= avgGroupSize) {
         bestFit = candidate;
         break;
-      } else {
-        fullWorkUnits.add(candidate);
       }
+      fullWorkUnits.add(candidate);
     }
 
     for (MultiWorkUnit fullWorkUnit : fullWorkUnits) {

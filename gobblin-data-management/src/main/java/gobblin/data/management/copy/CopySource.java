@@ -47,8 +47,11 @@ import gobblin.dataset.Dataset;
 import gobblin.dataset.DatasetsFinder;
 import gobblin.dataset.IterableDatasetFinder;
 import gobblin.dataset.IterableDatasetFinderImpl;
+import gobblin.instrumented.Instrumented;
 import gobblin.metrics.GobblinMetrics;
+import gobblin.metrics.MetricContext;
 import gobblin.metrics.Tag;
+import gobblin.metrics.event.EventSubmitter;
 import gobblin.metrics.event.sla.SlaEventKeys;
 import gobblin.source.extractor.Extractor;
 import gobblin.source.extractor.extract.AbstractSource;
@@ -56,8 +59,10 @@ import gobblin.source.workunit.Extract;
 import gobblin.source.workunit.WorkUnit;
 import gobblin.util.ExecutorsUtils;
 import gobblin.util.HadoopUtils;
-import gobblin.util.RateControlledFileSystem;
 import gobblin.util.WriterUtils;
+import gobblin.util.binpacking.FieldWeighter;
+import gobblin.source.workunit.WorkUnitWeighter;
+import gobblin.util.binpacking.WorstFitDecreasingBinPacking;
 import gobblin.util.executors.IteratorExecutor;
 import gobblin.util.guid.Guid;
 import gobblin.util.iterators.InterruptibleIterator;
@@ -79,10 +84,17 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
   public static final String MAX_CONCURRENT_LISTING_SERVICES =
       CopyConfiguration.COPY_PREFIX + ".max.concurrent.listing.services";
   public static final int DEFAULT_MAX_CONCURRENT_LISTING_SERVICES = 20;
-  public static final String MAX_FILESYSTEM_QPS = CopyConfiguration.COPY_PREFIX + ".max.filesystem.qps";
   public static final String MAX_FILES_COPIED_KEY = CopyConfiguration.COPY_PREFIX + ".max.files.copied";
   public static final int DEFAULT_MAX_FILES_COPIED = 100000;
   public static final String SIMULATE = CopyConfiguration.COPY_PREFIX + ".simulate";
+  public static final String MAX_SIZE_MULTI_WORKUNITS = CopyConfiguration.COPY_PREFIX + ".binPacking.maxSizePerBin";
+  public static final String MAX_WORK_UNITS_PER_BIN = CopyConfiguration.COPY_PREFIX + ".binPacking.maxWorkUnitsPerBin";
+
+  private static final String WORK_UNIT_WEIGHT = CopyConfiguration.COPY_PREFIX + ".workUnitWeight";
+
+  private final WorkUnitWeighter weighter = new FieldWeighter(WORK_UNIT_WEIGHT);
+
+  public MetricContext metricContext;
 
   /**
    * <ul>
@@ -103,22 +115,26 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
    */
   @Override
   public List<WorkUnit> getWorkunits(final SourceState state) {
+    this.metricContext = Instrumented.getMetricContext(state, CopySource.class);
 
     try {
 
       final FileSystem sourceFs = getSourceFileSystem(state);
       final FileSystem targetFs = getTargetFileSystem(state);
+      long maxSizePerBin = state.getPropAsLong(MAX_SIZE_MULTI_WORKUNITS, 0);
+      long maxWorkUnitsPerMultiWorkUnit = state.getPropAsLong(MAX_WORK_UNITS_PER_BIN, 50);
+      final long minWorkUnitWeight = Math.max(1, maxSizePerBin / maxWorkUnitsPerMultiWorkUnit);
 
       // TODO: The comparator sets the priority of file sets. Currently, all file sets have the same priority, this needs to
       // be pluggable.
-      final ConcurrentBoundedWorkUnitList workUnitList =
-          new ConcurrentBoundedWorkUnitList(state.getPropAsInt(MAX_FILES_COPIED_KEY, DEFAULT_MAX_FILES_COPIED),
-              new AllEqualComparator<FileSet<CopyEntity>>());
+      final ConcurrentBoundedWorkUnitList workUnitList = ConcurrentBoundedWorkUnitList.builder()
+          .maxSize(state.getPropAsInt(MAX_FILES_COPIED_KEY, DEFAULT_MAX_FILES_COPIED)).strictLimitMultiplier(2).build();
 
       final CopyConfiguration copyConfiguration = CopyConfiguration.builder(targetFs, state.getProperties()).build();
 
       DatasetsFinder<CopyableDatasetBase> datasetFinder =
-          DatasetUtils.instantiateDatasetFinder(state.getProperties(), sourceFs, DEFAULT_DATASET_PROFILE_CLASS_KEY);
+          DatasetUtils.instantiateDatasetFinder(state.getProperties(), sourceFs, DEFAULT_DATASET_PROFILE_CLASS_KEY,
+              new EventSubmitter.Builder(this.metricContext, CopyConfiguration.COPY_PREFIX).build());
 
       IterableDatasetFinder<CopyableDatasetBase> iterableDatasetFinder = datasetFinder instanceof IterableDatasetFinder
           ? (IterableDatasetFinder<CopyableDatasetBase>) datasetFinder : new IterableDatasetFinderImpl<>(datasetFinder);
@@ -143,20 +159,20 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
               } else if (copyableDataset instanceof CopyableDataset) {
                 iterableCopyableDataset = new IterableCopyableDatasetImpl((CopyableDataset) copyableDataset);
               } else {
-                throw new RuntimeException(
-                    String.format("Cannot process %s, can only copy %s or %s.", copyableDataset.getClass().getName(),
-                        CopyableDataset.class.getName(), IterableCopyableDataset.class.getName()));
+                throw new RuntimeException(String.format("Cannot process %s, can only copy %s or %s.",
+                    copyableDataset == null ? null : copyableDataset.getClass().getName(),
+                    CopyableDataset.class.getName(), IterableCopyableDataset.class.getName()));
               }
 
               return new DatasetWorkUnitGenerator(iterableCopyableDataset, sourceFs, targetFs, state, workUnitList,
-                  copyConfiguration);
+                  copyConfiguration, minWorkUnitWeight);
             }
           });
 
       try {
         List<Future<Void>> futures = new IteratorExecutor<>(callableIterator,
             state.getPropAsInt(MAX_CONCURRENT_LISTING_SERVICES, DEFAULT_MAX_CONCURRENT_LISTING_SERVICES),
-            ExecutorsUtils.newThreadFactory(Optional.of(log), Optional.of("Dataset-cleaner-pool-%d"))).execute();
+            ExecutorsUtils.newDaemonThreadFactory(Optional.of(log), Optional.of("Copy-file-listing-pool-%d"))).execute();
 
         for (Future<Void> future : futures) {
           try {
@@ -172,6 +188,8 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
 
       log.info(String.format("Created %s workunits ", workUnitList.getWorkUnits().size()));
 
+      copyConfiguration.getCopyContext().logCacheStatistics();
+
       if (state.contains(SIMULATE) && state.getPropAsBoolean(SIMULATE)) {
         Map<FileSet<CopyEntity>, List<WorkUnit>> copyEntitiesMap = workUnitList.getRawWorkUnitMap();
         log.info("Simulate mode enabled. Will not execute the copy.");
@@ -186,25 +204,19 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
         return Lists.newArrayList();
       }
 
-      return Lists.newArrayList(workUnitList.getWorkUnits());
+      List<WorkUnit> flatWorkUnits = workUnitList.getWorkUnits();
+      List<? extends WorkUnit> workUnits =
+          new WorstFitDecreasingBinPacking(maxSizePerBin).pack(flatWorkUnits, this.weighter);
+      log.info(String.format(
+          "Bin packed work units. Initial work units: %d, packed work units: %d, max weight per bin: %d, "
+              + "max work units per bin: %d.",
+          flatWorkUnits.size(), workUnits.size(), maxSizePerBin, maxWorkUnitsPerMultiWorkUnit));
+      return Lists.newArrayList(workUnits);
 
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
 
-  }
-
-  private static FileSystem getOptionallyThrottledFileSystem(FileSystem fs, State state) throws IOException {
-    if (state.contains(MAX_FILESYSTEM_QPS)) {
-      try {
-        RateControlledFileSystem newFS = new RateControlledFileSystem(fs, state.getPropAsInt(MAX_FILESYSTEM_QPS));
-        newFS.startRateControl();
-        return newFS;
-      } catch (ExecutionException ee) {
-        throw new IOException("Could not create throttled FileSystem.", ee);
-      }
-    }
-    return fs;
   }
 
   /**
@@ -219,6 +231,7 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
     private final State state;
     private final ConcurrentBoundedWorkUnitList workUnitList;
     private final CopyConfiguration copyConfiguration;
+    private final long minWorkUnitWeight;
 
     @Override
     public Void call() {
@@ -232,7 +245,7 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
         Iterator<FileSet<CopyEntity>> fileSets =
             this.copyableDataset.getFileSetIterator(this.targetFs, this.copyConfiguration);
 
-        while (fileSets.hasNext() && !this.workUnitList.hasRejectedFileSet()) {
+        while (fileSets.hasNext() && !shouldStopGeneratingWorkUnits(this.workUnitList)) {
           FileSet<CopyEntity> fileSet = fileSets.next();
           String extractId = fileSet.getName().replace(':', '_');
           Extract extract = new Extract(Extract.TableType.SNAPSHOT_ONLY, CopyConfiguration.COPY_PREFIX, extractId);
@@ -251,6 +264,7 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
             workUnit.setProp(ConfigurationKeys.DATASET_URN_KEY, datasetAndPartition.toString());
             workUnit.setProp(SlaEventKeys.DATASET_URN_KEY, this.copyableDataset.datasetURN());
             workUnit.setProp(SlaEventKeys.PARTITION_KEY, copyEntity.getFileSet());
+            setWorkUnitWeight(workUnit, copyEntity, minWorkUnitWeight);
             computeAndSetWorkUnitGuid(workUnit);
             workUnitsForPartition.add(workUnit);
           }
@@ -267,7 +281,7 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
   private boolean shouldStopGeneratingWorkUnits(ConcurrentBoundedWorkUnitList workUnitList) {
     // Stop generating work units the first time the work unit container rejects a file set due to capacity issues.
     // TODO: more sophisticated stop algorithm.
-    return workUnitList.hasRejectedFileSet();
+    return workUnitList.isFull() || workUnitList.hasRejectedFileSet();
   }
 
   /**
@@ -300,11 +314,20 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
 
     Configuration conf = HadoopUtils.getConfFromState(state);
     String uri = state.getProp(ConfigurationKeys.SOURCE_FILEBASED_FS_URI, ConfigurationKeys.LOCAL_FS_URI);
-    return getOptionallyThrottledFileSystem(FileSystem.get(URI.create(uri), conf), state);
+    return HadoopUtils.getOptionallyThrottledFileSystem(FileSystem.get(URI.create(uri), conf), state);
   }
 
   private static FileSystem getTargetFileSystem(State state) throws IOException {
-    return getOptionallyThrottledFileSystem(WriterUtils.getWriterFS(state, 1, 0), state);
+    return HadoopUtils.getOptionallyThrottledFileSystem(WriterUtils.getWriterFS(state, 1, 0), state);
+  }
+
+  private static void setWorkUnitWeight(WorkUnit workUnit, CopyEntity copyEntity, long minWeight) {
+    long weight = 0;
+    if (copyEntity instanceof CopyableFile) {
+      weight = ((CopyableFile) copyEntity).getOrigin().getLen();
+    }
+    weight = Math.max(weight, minWeight);
+    workUnit.setProp(WORK_UNIT_WEIGHT, Long.toString(weight));
   }
 
   private static void computeAndSetWorkUnitGuid(WorkUnit workUnit) throws IOException {
@@ -354,21 +377,21 @@ public class CopySource extends AbstractSource<String, FileAwareInputStream> {
   /**
    * Deserialize a {@link List} of {@link CopyEntity}s from a {@link State} at {@link #SERIALIZED_COPYABLE_FILE}
    */
-  public static CopyEntity deserializeCopyEntity(State state) throws IOException {
+  public static CopyEntity deserializeCopyEntity(State state) {
     return CopyEntity.deserialize(state.getProp(SERIALIZED_COPYABLE_FILE));
   }
 
   /**
    * Serialize a {@link CopyableDataset} into a {@link State} at {@link #SERIALIZED_COPYABLE_DATASET}
    */
-  public static void serializeCopyableDataset(State state, CopyableDatasetMetadata copyableDataset) throws IOException {
+  public static void serializeCopyableDataset(State state, CopyableDatasetMetadata copyableDataset) {
     state.setProp(SERIALIZED_COPYABLE_DATASET, copyableDataset.serialize());
   }
 
   /**
    * Deserialize a {@link CopyableDataset} from a {@link State} at {@link #SERIALIZED_COPYABLE_DATASET}
    */
-  public static CopyableDatasetMetadata deserializeCopyableDataset(State state) throws IOException {
+  public static CopyableDatasetMetadata deserializeCopyableDataset(State state) {
     return CopyableDatasetMetadata.deserialize(state.getProp(SERIALIZED_COPYABLE_DATASET));
   }
 

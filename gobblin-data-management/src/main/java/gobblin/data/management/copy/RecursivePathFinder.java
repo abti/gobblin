@@ -13,7 +13,6 @@
 package gobblin.data.management.copy;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -23,9 +22,14 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 
+import com.google.common.collect.Sets;
+
 import gobblin.data.management.dataset.DatasetUtils;
 import gobblin.util.FileListUtils;
 import gobblin.util.PathUtils;
+import gobblin.util.filters.AndPathFilter;
+import gobblin.util.filters.HiddenFilter;
+
 
 /**
  * Used to find the path recursively from the root based on the {@link PathFilter} created in the {@link Properties}
@@ -45,18 +49,15 @@ public class RecursivePathFinder {
     this.pathFilter = DatasetUtils.instantiatePathFilter(properties);
   }
 
-  public Set<Path> getPaths() throws IOException{
-    Set<Path> result = new HashSet<Path>();
+  public Set<FileStatus> getPaths(boolean skipHiddenPaths) throws IOException {
 
     if (!this.fs.exists(this.rootPath)) {
-      return result;
+      return Sets.newHashSet();
     }
+    PathFilter actualFilter =
+        skipHiddenPaths ? new AndPathFilter(new HiddenFilter(), this.pathFilter) : this.pathFilter;
+    List<FileStatus> files = FileListUtils.listFilesRecursively(this.fs, this.rootPath, actualFilter);
 
-    List<FileStatus> files = FileListUtils.listFilesRecursively(this.fs, this.rootPath, this.pathFilter);
-
-    for (FileStatus file : files) {
-      result.add(file.getPath());
-    }
-    return result;
+    return Sets.newHashSet(files);
   }
 }

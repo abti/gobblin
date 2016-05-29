@@ -33,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * A {@link HiveSerDeManager} for registering Avro tables and partitions.
  *
- * @author ziliu
+ * @author Ziyang Liu
  */
 @Slf4j
 @Alpha
@@ -106,9 +106,8 @@ public class HiveAvroSerDeManager extends HiveSerDeManager {
     }
   }
 
-  @SuppressWarnings("deprecation")
   private void addSchemaProperties(Path path, HiveRegistrationUnit hiveUnit) throws IOException {
-    Preconditions.checkArgument(this.fs.getFileStatus(path).isDir(), path + " is not a directory.");
+    Preconditions.checkArgument(this.fs.getFileStatus(path).isDirectory(), path + " is not a directory.");
 
     Path schemaFile = new Path(path, this.schemaFileName);
     if (this.useSchemaFile) {

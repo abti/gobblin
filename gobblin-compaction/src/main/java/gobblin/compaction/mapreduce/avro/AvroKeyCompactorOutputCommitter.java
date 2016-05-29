@@ -21,7 +21,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.mapreduce.Counter;
-import org.apache.hadoop.mapreduce.StatusReporter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter;
 import org.slf4j.Logger;
@@ -69,7 +68,7 @@ public class AvroKeyCompactorOutputCommitter extends FileOutputCommitter {
       } else {
         fileNamePrefix = CompactionRecordCountProvider.MR_OUTPUT_FILE_PREFIX;
       }
-      String fileName = new CompactionRecordCountProvider().constructFileName(fileNamePrefix, recordCount);
+      String fileName = CompactionRecordCountProvider.constructFileName(fileNamePrefix, recordCount);
 
       for (FileStatus status : fs.listStatus(workPath, new PathFilter() {
         @Override
@@ -88,17 +87,10 @@ public class AvroKeyCompactorOutputCommitter extends FileOutputCommitter {
 
   private static long getRecordCountFromCounter(TaskAttemptContext context, Enum<?> counterName) {
     try {
-      //In Hadoop 2, TaskAttemptContext.getCounter() is available
       Method getCounterMethod = context.getClass().getMethod("getCounter", Enum.class);
       return ((Counter) getCounterMethod.invoke(context, counterName)).getValue();
-    } catch (NoSuchMethodException e) {
-      //In Hadoop 1, TaskAttemptContext.getCounter() is not available
-      //Have to cast context to TaskAttemptContext in the mapred package, then get a StatusReporter instance
-      org.apache.hadoop.mapred.TaskAttemptContext mapredContext = (org.apache.hadoop.mapred.TaskAttemptContext) context;
-      return ((StatusReporter) mapredContext.getProgressible()).getCounter(counterName).getValue();
     } catch (Exception e) {
       throw new RuntimeException("Error reading record count counter", e);
     }
   }
-
 }

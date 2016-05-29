@@ -55,7 +55,7 @@ import gobblin.util.AvroUtils;
  * To dedup using entire records set compaction.use.all.attributes=true. Otherwise, a schema needs
  * to be provided by compaction.avro.key.schema.loc, based on which the dedup is performed.
  *
- * @author ziliu
+ * @author Ziyang Liu
  */
 public class MRCompactorAvroKeyDedupJobRunner extends MRCompactorJobRunner {
 
@@ -234,12 +234,11 @@ public class MRCompactorAvroKeyDedupJobRunner extends MRCompactorJobRunner {
     return null;
   }
 
-  @SuppressWarnings("deprecation")
   private Schema getNewestSchemaFromSource(Path sourceDir) throws IOException {
     FileStatus[] files = this.fs.listStatus(sourceDir);
     Arrays.sort(files, new LastModifiedDescComparator());
     for (FileStatus status : files) {
-      if (status.isDir()) {
+      if (status.isDirectory()) {
         Schema schema = getNewestSchemaFromSource(status.getPath());
         if (schema != null)
           return schema;

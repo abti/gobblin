@@ -65,7 +65,7 @@ public class FsDatasetStateStore extends FsStateStore<JobState.DatasetState> {
     this.useTmpFileForPut = false;
   }
 
-  public FsDatasetStateStore(FileSystem fs, String storeRootDir) throws IOException {
+  public FsDatasetStateStore(FileSystem fs, String storeRootDir) {
     super(fs, storeRootDir, JobState.DatasetState.class);
     this.useTmpFileForPut = false;
   }
@@ -174,9 +174,7 @@ public class FsDatasetStateStore extends FsStateStore<JobState.DatasetState> {
       if (!previousDatasetStates.isEmpty()) {
         // There should be a single dataset state on the list if the list is not empty
         JobState.DatasetState previousDatasetState = previousDatasetStates.get(0);
-        datasetStatesByUrns.put(
-            previousDatasetState.getProp(ConfigurationKeys.DATASET_URN_KEY, ConfigurationKeys.DEFAULT_DATASET_URN),
-            previousDatasetState);
+        datasetStatesByUrns.put(previousDatasetState.getDatasetUrn(), previousDatasetState);
       }
     }
 

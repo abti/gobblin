@@ -36,7 +36,7 @@ import lombok.Setter;
  *   {@link gobblin.hive.metastore.HiveMetaStoreUtils}.
  * </p>
  *
- * @author ziliu
+ * @author Ziyang Liu
  */
 @Getter
 @Alpha
@@ -87,7 +87,7 @@ public class HiveTable extends HiveRegistrationUnit {
         this.tableType = Optional.of((String) value);
         break;
       case HiveConstants.RETENTION:
-        this.retention = Optional.of((long) value);
+        this.retention = Optional.of((Long) value);
         break;
       default:
         isExistingField = false;

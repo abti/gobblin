@@ -111,11 +111,9 @@ Gobblin provides two abstract classes, [`KafkaSource`](https://github.com/linked
 
 To use them in a Kafka-HDFS ingestion job, one should subclass `KafkaExtractor` and implement method `decodeRecord(MessageAndOffset)`, which takes a `MessageAndOffset` object pulled from the Kafka broker and decodes it into a desired object. One should also subclass `KafkaSource` and implement `getExtractor(WorkUnitState)` which should return an instance of the Extractor class.
 
-Gobblin currently provides two concrete implementations: [`KafkaSimpleSource`](https://github.com/linkedin/gobblin/blob/master/gobblin-core/src/main/java/gobblin/source/extractor/extract/kafka/KafkaSimpleSource.java)/[`KafkaSimpleExtractor`](https://github.com/linkedin/gobblin/blob/master/gobblin-core/src/main/java/gobblin/source/extractor/extract/kafka/KafkaSimpleExtractor.java), and [`KafkaAvroSource`](https://github.com/linkedin/gobblin/blob/master/gobblin-core/src/main/java/gobblin/source/extractor/extract/kafka/KafkaAvroSource.java)/[`KafkaAvroExtractor`](https://github.com/linkedin/gobblin/blob/master/gobblin-core/src/main/java/gobblin/source/extractor/extract/kafka/KafkaExtractor.java). 
+As examples, take a look at [`KafkaSimpleSource`](https://github.com/linkedin/gobblin/blob/master/gobblin-core/src/main/java/gobblin/source/extractor/extract/kafka/KafkaSimpleSource.java), [`KafkaSimpleExtractor`](https://github.com/linkedin/gobblin/blob/master/gobblin-core/src/main/java/gobblin/source/extractor/extract/kafka/KafkaSimpleExtractor.java), and [`KafkaAvroExtractor`](https://github.com/linkedin/gobblin/blob/master/gobblin-core/src/main/java/gobblin/source/extractor/extract/kafka/KafkaExtractor.java).
 
-`KafkaSimpleExtractor` simply returns the payload of the `MessageAndOffset` object as a byte array. A job that uses `KafkaSimpleExtractor` may use a `Converter` to convert the byte array to whatever format desired. For example, if the desired output format is JSON, one may implement an `ByteArrayToJsonConverter` to convert the byte array to JSON. Alternatively one may implement a `KafkaJsonExtractor`, which extends `KafkaExtractor` and convert the `MessageAndOffset` object into a JSON object in the `decodeRecord` method. Both approaches should work equally well.
-
-`KafkaAvroExtractor` decodes the payload of the `MessageAndOffset` object into an Avro [`GenericRecord`](http://avro.apache.org/docs/current/api/java/index.html?org/apache/avro/generic/GenericRecord.html) object. It requires that the byte 0 of the payload be 0, bytes 1-16 of the payload be a 16-byte schema ID, and the remaining bytes be the encoded Avro record. It also requires the existence of a schema registry that returns the Avro schema given the schema ID, which is used to decode the byte array. Thus this class is mainly applicable to LinkedIn's internal Kafka clusters.
+`KafkaSimpleExtractor` simply returns the payload of the `MessageAndOffset` object as a byte array. A job that uses `KafkaSimpleExtractor` may use a `Converter` to convert the byte array to whatever format desired. For example, if the desired output format is JSON, one may implement an `ByteArrayToJsonConverter` to convert the byte array to JSON. Alternatively one may implement a `KafkaJsonExtractor`, which extends `KafkaExtractor` and convert the `MessageAndOffset` object into a JSON object in the `decodeRecord` method. Both approaches should work equally well. `KafkaAvroExtractor` decodes the payload of the `MessageAndOffset` object into an Avro [`GenericRecord`](http://avro.apache.org/docs/current/api/java/index.html?org/apache/avro/generic/GenericRecord.html) object.
 
 **Writer and Publisher**
 
@@ -225,3 +223,12 @@ When using this size estimator, each job run will record the average time per re
 If a topic is not pulled in a run, its estimated average time per record is the geometric mean of the estimated average time per record of all topics that are pulled in this run. If no topic was pulled in this run, a default value of 1.0 is used.
 
 The time-based estimator is more accurate than the size-based estimator when the time to pull a record is not proportional to the size of the record. However, the time-based estimator may lose accuracy when there are fluctuations in the Hadoop cluster which causes the average time for a partition to vary between different runs.
+
+### Topic-specific Partitioning
+
+`kafka.topic.specific.state` is a configuration key that allows a user to specify config parameters on a topic specific level. The value of this config should be a JSON Array. Each entry should be a json string and should contain a primitive value that identifies the topic name. All configs in each topic entry will be added to the WorkUnit for that topic.
+
+An example value could be:
+`[{"topic.name" : "myTopic1", "writer.partition.columns" : "header.memberId"}, {"topic.name" : "myTopic2", "writer.partition.columns" : "auditHeader.time"}]`.
+
+The "topic.name" field also allows regular expressions. For example, one can specify key, value "topic.name" : "myTopic.\*". In this case all topics whose name matches the pattern "myTopic.*" will have all the specified config properties added to their WorkUnit. If more than one topic matches multiple "topic.name"s then the properties from all the JSON objects will be added to their WorkUnit.
