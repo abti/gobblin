@@ -50,7 +50,7 @@ import lombok.extern.slf4j.Slf4j;
  *   that documents the published paths, such as {@link BaseDataPublisher}.
  * </p>
  *
- * @author ziliu
+ * @author Ziyang Liu
  */
 @Slf4j
 public class HiveRegistrationPublisher extends DataPublisher {
@@ -60,7 +60,7 @@ public class HiveRegistrationPublisher extends DataPublisher {
   private final HiveRegistrationPolicy policy;
   private final ExecutorService hivePolicyExecutor;
 
-  public HiveRegistrationPublisher(State state) throws IOException {
+  public HiveRegistrationPublisher(State state) {
     super(state);
     this.hiveRegister = this.closer.register(HiveRegister.get(state));
     this.policy = HiveRegistrationPolicyBase.getPolicy(state);
@@ -79,8 +79,7 @@ public class HiveRegistrationPublisher extends DataPublisher {
 
   @Deprecated
   @Override
-  public void initialize() throws IOException {
-  }
+  public void initialize() throws IOException {}
 
   @Override
   public void publishData(Collection<? extends WorkUnitState> states) throws IOException {
@@ -113,7 +112,7 @@ public class HiveRegistrationPublisher extends DataPublisher {
     log.info("Finished generating all HiveSpecs");
   }
 
-  private Set<String> getUniquePathsToRegister(Collection<? extends WorkUnitState> states) {
+  private static Set<String> getUniquePathsToRegister(Collection<? extends WorkUnitState> states) {
     Set<String> paths = Sets.newHashSet();
     for (State state : states) {
       if (state.contains(ConfigurationKeys.PUBLISHER_DIRS)) {

@@ -25,8 +25,6 @@ import org.slf4j.LoggerFactory;
 
 /**
  * A class for read operations on HDFS.
- *
- * @author ziliu
  */
 public class HdfsReader extends HdfsIO {
 
@@ -46,12 +44,11 @@ public class HdfsReader extends HdfsIO {
     return new FsInput(path, conf);
   }
 
-  @SuppressWarnings("deprecation")
   public static String getFirstDataFilePathInDir(String dirInHdfs) throws IOException {
     FileStatus[] fileStatuses = getFileSystem().listStatus(new Path(dirInHdfs));
     for (FileStatus fileStatus : fileStatuses) {
       Path dataFilePath = fileStatus.getPath();
-      if (!fileStatus.isDir() && !dataFilePath.getName().startsWith("_")) {
+      if (!fileStatus.isDirectory() && !dataFilePath.getName().startsWith("_")) {
         return dataFilePath.toString();
       }
     }

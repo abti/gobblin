@@ -73,7 +73,7 @@ import gobblin.util.recordcount.LateFileRecordCountProvider;
  * {@value MRCompactor#COMPACTION_JOB_LATE_DATA_FILES} to a 'late' subdirectory within
  * the output directory.
  *
- * @author ziliu
+ * @author Ziyang Liu
  */
 @SuppressWarnings("deprecation")
 public abstract class MRCompactorJobRunner implements Runnable, Comparable<MRCompactorJobRunner> {
@@ -292,7 +292,7 @@ public abstract class MRCompactorJobRunner implements Runnable, Comparable<MRCom
         @Override
         public Void call() throws Exception {
           Path convertedFilePath = MRCompactorJobRunner.this.outputRecordCountProvider.convertPath(
-              MRCompactorJobRunner.this.lateInputRecordCountProvider.restoreFilePath(filePath),
+              LateFileRecordCountProvider.restoreFilePath(filePath),
               MRCompactorJobRunner.this.inputRecordCountProvider);
           String targetFileName = convertedFilePath.getName();
           Path outPath = MRCompactorJobRunner.this.lateOutputRecordCountProvider.constructLateFilePath(targetFileName,

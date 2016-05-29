@@ -14,8 +14,9 @@ package gobblin.util;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
+import java.util.Iterator;
 import java.util.Properties;
+import java.util.Map.Entry;
 
 import org.apache.commons.configuration.ConfigurationConverter;
 import org.apache.commons.configuration.ConfigurationException;
@@ -64,6 +65,20 @@ public class JobConfigurationUtils {
   }
 
   /**
+   * Put all configuration properties in a given {@link Configuration} object into a given
+   * {@link Properties} object.
+   *
+   * @param configuration the given {@link Configuration} object
+   * @param properties the given {@link Properties} object
+   */
+  public static void putConfigurationIntoProperties(Configuration configuration, Properties properties) {
+    for (Iterator<Entry<String, String>> it = configuration.iterator(); it.hasNext();) {
+      Entry<String, String> entry = it.next();
+      properties.put(entry.getKey(), entry.getValue());
+    }
+  }
+
+  /**
    * Put all configuration properties in a given {@link State} object into a given
    * {@link Configuration} object.
    *
@@ -80,13 +95,13 @@ public class JobConfigurationUtils {
    * Load the properties from the specified file into a {@link Properties} object.
    *
    * @param fileName the name of the file to load properties from
+   * @param conf configuration object to determine the file system to be used
    * @return a new {@link Properties} instance
    */
-  public static Properties fileToProperties(String fileName)
-      throws IOException, ConfigurationException, URISyntaxException {
+  public static Properties fileToProperties(String fileName, Configuration conf)
+      throws IOException, ConfigurationException {
 
     PropertiesConfiguration propsConfig = new PropertiesConfiguration();
-    Configuration conf = new Configuration();
     Path filePath = new Path(fileName);
     URI fileURI = filePath.toUri();
 
@@ -97,4 +112,15 @@ public class JobConfigurationUtils {
     }
     return ConfigurationConverter.getProperties(propsConfig);
   }
+
+  /**
+   * Load the properties from the specified file into a {@link Properties} object.
+   *
+   * @param fileName the name of the file to load properties from
+   * @return a new {@link Properties} instance
+   */
+  public static Properties fileToProperties(String fileName) throws IOException, ConfigurationException {
+    return fileToProperties(fileName, new Configuration());
+  }
+
 }

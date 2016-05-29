@@ -13,13 +13,14 @@
 package gobblin.yarn;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-
 import org.apache.helix.HelixManager;
 import org.apache.helix.task.JobConfig;
 import org.apache.helix.task.JobQueue;
@@ -27,7 +28,6 @@ import org.apache.helix.task.TaskConfig;
 import org.apache.helix.task.TaskDriver;
 import org.apache.helix.task.TaskUtil;
 import org.apache.helix.task.WorkflowContext;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,12 +38,9 @@ import gobblin.metrics.Tag;
 import gobblin.metrics.event.TimingEvent;
 import gobblin.rest.LauncherTypeEnum;
 import gobblin.runtime.AbstractJobLauncher;
-import gobblin.runtime.FileBasedJobLock;
 import gobblin.runtime.JobLauncher;
-import gobblin.runtime.JobLock;
 import gobblin.runtime.TaskState;
 import gobblin.runtime.TaskStateCollectorService;
-import gobblin.runtime.util.TimingEventNames;
 import gobblin.source.workunit.MultiWorkUnit;
 import gobblin.source.workunit.WorkUnit;
 import gobblin.util.JobLauncherUtils;
@@ -99,7 +96,7 @@ public class GobblinHelixJobLauncher extends AbstractJobLauncher {
   private volatile boolean jobSubmitted = false;
   private volatile boolean jobComplete = false;
 
-  public GobblinHelixJobLauncher(Properties jobProps, HelixManager helixManager, FileSystem fs, Path appWorkDir,
+  public GobblinHelixJobLauncher(Properties jobProps, HelixManager helixManager, Path appWorkDir,
       List<? extends Tag<?>> metadataTags)
       throws Exception {
     super(jobProps, metadataTags);
@@ -107,7 +104,6 @@ public class GobblinHelixJobLauncher extends AbstractJobLauncher {
     this.helixManager = helixManager;
     this.helixTaskDriver = new TaskDriver(this.helixManager);
 
-    this.fs = fs;
     this.appWorkDir = appWorkDir;
     this.inputWorkUnitDir = new Path(appWorkDir, GobblinYarnConfigurationKeys.INPUT_WORK_UNIT_DIR_NAME);
     this.outputTaskStateDir = new Path(this.appWorkDir, GobblinYarnConfigurationKeys.OUTPUT_TASK_STATE_DIR_NAME +
@@ -120,6 +116,9 @@ public class GobblinHelixJobLauncher extends AbstractJobLauncher {
 
     this.stateSerDeRunnerThreads = Integer.parseInt(jobProps.getProperty(ParallelRunner.PARALLEL_RUNNER_THREADS_KEY,
         Integer.toString(ParallelRunner.DEFAULT_PARALLEL_RUNNER_THREADS)));
+
+    URI fsUri = URI.create(jobProps.getProperty(ConfigurationKeys.FS_URI_KEY, ConfigurationKeys.LOCAL_FS_URI));
+    this.fs = FileSystem.get(fsUri, new Configuration());
 
     this.taskStateCollectorService = new TaskStateCollectorService(jobProps, this.jobContext.getJobState(),
         this.eventBus, this.fs, outputTaskStateDir);
@@ -141,13 +140,13 @@ public class GobblinHelixJobLauncher extends AbstractJobLauncher {
       this.taskStateCollectorService.startAsync().awaitRunning();
 
       TimingEvent jobSubmissionTimer =
-          this.eventSubmitter.getTimingEvent(TimingEventNames.RunJobTimings.HELIX_JOB_SUBMISSION);
+          this.eventSubmitter.getTimingEvent(TimingEvent.RunJobTimings.HELIX_JOB_SUBMISSION);
       submitJobToHelix(createJob(workUnits));
       jobSubmissionTimer.stop();
       LOGGER.info(String.format("Submitted job %s to Helix", this.jobContext.getJobId()));
       this.jobSubmitted = true;
 
-      TimingEvent jobRunTimer = this.eventSubmitter.getTimingEvent(TimingEventNames.RunJobTimings.HELIX_JOB_RUN);
+      TimingEvent jobRunTimer = this.eventSubmitter.getTimingEvent(TimingEvent.RunJobTimings.HELIX_JOB_RUN);
       waitForJobCompletion();
       jobRunTimer.stop();
       LOGGER.info(String.format("Job %s completed", this.jobContext.getJobId()));
@@ -160,15 +159,13 @@ public class GobblinHelixJobLauncher extends AbstractJobLauncher {
   }
 
   @Override
-  protected JobLock getJobLock() throws IOException {
-    return new FileBasedJobLock(this.fs, this.jobProps.getProperty(ConfigurationKeys.JOB_LOCK_DIR_KEY),
-        this.jobContext.getJobName());
-  }
-
-  @Override
   protected void executeCancellation() {
-    if (this.jobSubmitted && !this.jobComplete) {
-      this.helixTaskDriver.deleteJob(this.helixQueueName, this.jobContext.getJobId());
+    if (this.jobSubmitted) {
+      try {
+        this.helixTaskDriver.deleteJob(this.helixQueueName, this.jobContext.getJobId());
+      } catch (IllegalArgumentException e) {
+        LOGGER.warn(String.format("Failed to cleanup job %s in Helix", this.jobContext.getJobId()), e);
+      }
     }
   }
 

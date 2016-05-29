@@ -50,7 +50,7 @@ import gobblin.configuration.State;
  * A class for managing password encryption and decryption. To encrypt or decrypt a password, a master password
  * should be provided which is used as encryption or decryption key.
  *
- * @author ziliu
+ * @author Ziyang Liu
  */
 public class PasswordManager {
 
@@ -215,7 +215,7 @@ public class PasswordManager {
 
   public static Optional<String> getMasterPassword(FileSystem fs, Path masterPasswordFile) {
     try (Closer closer = Closer.create()) {
-      if (!fs.exists(masterPasswordFile) || fs.getFileStatus(masterPasswordFile).isDir()) {
+      if (!fs.exists(masterPasswordFile) || fs.getFileStatus(masterPasswordFile).isDirectory()) {
         LOG.warn(masterPasswordFile + " does not exist or is not a file. Cannot decrypt any encrypted password.");
         return Optional.absent();
       }

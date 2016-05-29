@@ -12,6 +12,7 @@
 
 package gobblin.yarn;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -69,7 +70,7 @@ import gobblin.util.ConfigUtils;
 @Test(groups = { "gobblin.yarn" })
 public class GobblinHelixJobLauncherTest {
 
-  private static final int TEST_ZK_PORT = 3184;
+  private static final int TEST_ZK_PORT = 3084;
 
   private HelixManager helixManager;
 
@@ -109,6 +110,12 @@ public class GobblinHelixJobLauncherTest {
     this.helixManager = HelixManagerFactory
         .getZKHelixManager(helixClusterName, TestHelper.TEST_HELIX_INSTANCE_NAME, InstanceType.CONTROLLER,
             zkConnectingString);
+    this.closer.register(new Closeable() {
+      @Override
+      public void close() throws IOException {
+        helixManager.disconnect();
+      }
+    });
     this.helixManager.connect();
 
     Properties properties = ConfigUtils.configToProperties(config);
@@ -116,6 +123,14 @@ public class GobblinHelixJobLauncherTest {
     this.localFs = FileSystem.getLocal(new Configuration());
 
     this.appWorkDir = new Path(GobblinHelixJobLauncherTest.class.getSimpleName());
+    this.closer.register(new Closeable() {
+      @Override
+      public void close() throws IOException {
+        if (localFs.exists(appWorkDir)) {
+          localFs.delete(appWorkDir, true);
+        }
+      }
+    });
 
     this.jobName = config.getString(ConfigurationKeys.JOB_NAME_KEY);
 
@@ -129,8 +144,7 @@ public class GobblinHelixJobLauncherTest {
     properties.setProperty(ConfigurationKeys.SOURCE_FILEBASED_FILES_TO_PULL, sourceJsonFile.getAbsolutePath());
 
     this.gobblinHelixJobLauncher = this.closer.register(
-        new GobblinHelixJobLauncher(properties, this.helixManager, this.localFs, this.appWorkDir,
-            ImmutableList.<Tag<?>>of()));
+        new GobblinHelixJobLauncher(properties, this.helixManager, this.appWorkDir, ImmutableList.<Tag<?>>of()));
 
     this.gobblinWorkUnitRunner =
         new GobblinWorkUnitRunner(TestHelper.TEST_APPLICATION_NAME, TestHelper.TEST_HELIX_INSTANCE_NAME,
@@ -174,13 +188,6 @@ public class GobblinHelixJobLauncherTest {
       this.thread.join();
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
-    }
-
-    try {
-      this.helixManager.disconnect();
-      if (this.localFs.exists(this.appWorkDir)) {
-        this.localFs.delete(this.appWorkDir, true);
-      }
     } finally {
       this.closer.close();
     }

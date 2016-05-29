@@ -39,7 +39,7 @@ import gobblin.hive.HiveTable;
  * A utility class for converting Hive's {@link Table} and {@link Partition} objects into Gobblin's
  * {@link HiveTable} and {@link HivePartition} objects, and vice versa.
  *
- * @author ziliu
+ * @author Ziyang Liu
  */
 @Alpha
 public class HiveMetaStoreUtils {
@@ -75,7 +75,7 @@ public class HiveMetaStoreUtils {
     } else {
       table.setTableType(DEFAULT_TABLE_TYPE.toString());
     }
-    if (table.getTableType() == TableType.EXTERNAL_TABLE.toString()) {
+    if (table.getTableType().equals(TableType.EXTERNAL_TABLE.toString())) {
       table.getParameters().put(EXTERNAL, Boolean.TRUE.toString().toUpperCase());
     }
     table.setPartitionKeys(getFieldSchemas(hiveTable.getPartitionKeys()));

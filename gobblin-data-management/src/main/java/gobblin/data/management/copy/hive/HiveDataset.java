@@ -22,14 +22,19 @@ import org.apache.hadoop.hive.ql.metadata.Table;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
 
 import gobblin.annotation.Alpha;
+import gobblin.configuration.State;
 import gobblin.data.management.copy.CopyConfiguration;
 import gobblin.data.management.copy.CopyEntity;
 import gobblin.data.management.copy.CopyableDataset;
 import gobblin.data.management.copy.IterableCopyableDataset;
 import gobblin.data.management.partition.FileSet;
 import gobblin.hive.HiveMetastoreClientPool;
+import gobblin.instrumented.Instrumented;
+import gobblin.metrics.MetricContext;
+import gobblin.metrics.Tag;
 import gobblin.util.PathUtils;
 
 import lombok.Getter;
@@ -44,35 +49,46 @@ import lombok.extern.slf4j.Slf4j;
 @Getter
 public class HiveDataset implements IterableCopyableDataset {
 
+  public static final String REGISTERER = "registerer";
+  public static final String REGISTRATION_GENERATION_TIME_MILLIS = "registrationGenerationTimeMillis";
+  public static final String DATABASE = "Database";
+  public static final String TABLE = "Table";
+
   protected final Properties properties;
   protected final FileSystem fs;
   protected final HiveMetastoreClientPool clientPool;
+  @Getter
   protected final Table table;
 
   // Only set if table has exactly one location
   protected final Optional<Path> tableRootPath;
 
   protected final String tableIdentifier;
+  @Getter
+  private final MetricContext metricContext;
 
-
-  public HiveDataset(FileSystem fs, HiveMetastoreClientPool clientPool, Table table, Properties properties) throws IOException {
+  public HiveDataset(FileSystem fs, HiveMetastoreClientPool clientPool, Table table, Properties properties) {
     this.fs = fs;
     this.clientPool = clientPool;
     this.table = table;
     this.properties = properties;
 
-    this.tableRootPath = PathUtils.isGlob(this.table.getDataLocation()) ? Optional.<Path>absent() :
-        Optional.of(this.table.getDataLocation());
+    this.tableRootPath = PathUtils.isGlob(this.table.getDataLocation()) ? Optional.<Path> absent()
+        : Optional.of(this.table.getDataLocation());
 
     this.tableIdentifier = this.table.getDbName() + "." + this.table.getTableName();
-    log.info("Created Hive dataset for table " + tableIdentifier);
+    log.info("Created Hive dataset for table " + this.tableIdentifier);
+
+    this.metricContext = Instrumented.getMetricContext(new State(properties), HiveDataset.class,
+        Lists.<Tag<?>> newArrayList(new Tag<>(DATABASE, table.getDbName()), new Tag<>(TABLE, table.getTableName())));
   }
 
   /**
    * Finds all files read by the table and generates CopyableFiles.
    * For the specific semantics see {@link HiveCopyEntityHelper#getCopyEntities}.
    */
-  @Override public Iterator<FileSet<CopyEntity>> getFileSetIterator(FileSystem targetFs, CopyConfiguration configuration)
+  @Override
+  public Iterator<FileSet<CopyEntity>> getFileSetIterator(FileSystem targetFs, CopyConfiguration configuration)
       throws IOException {
     try {
       return new HiveCopyEntityHelper(this, configuration, targetFs).getCopyEntities();
@@ -82,7 +98,8 @@ public class HiveDataset implements IterableCopyableDataset {
     }
   }
 
-  @Override public String datasetURN() {
+  @Override
+  public String datasetURN() {
     return this.table.getCompleteName();
   }
 

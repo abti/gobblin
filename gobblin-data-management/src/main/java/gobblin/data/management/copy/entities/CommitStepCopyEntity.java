@@ -12,6 +12,7 @@
 
 package gobblin.data.management.copy.entities;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.util.Map;
@@ -23,6 +24,7 @@ import gobblin.data.management.copy.CopyEntity;
 /**
  * A {@link CopyEntity} encapsulating a {@link CommitStep}.
  */
+@EqualsAndHashCode(callSuper = true)
 public class CommitStepCopyEntity extends CopyEntity {
 
   @Getter
@@ -39,6 +41,6 @@ public class CommitStepCopyEntity extends CopyEntity {
 
   @Override
   public String explain() {
-    return step.toString();
+    return this.step.toString();
   }
 }

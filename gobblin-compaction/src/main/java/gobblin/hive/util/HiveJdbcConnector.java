@@ -37,7 +37,7 @@ import gobblin.password.PasswordManager;
 /**
  * A class for managing a Hive JDBC connection.
  *
- * @author ziliu
+ * @author Ziyang Liu
  */
 public class HiveJdbcConnector implements Closeable {
 
@@ -184,8 +184,9 @@ public class HiveJdbcConnector implements Closeable {
   private static void addHiveSiteDirToClasspath(String hiveSiteDir) {
     LOG.info("Adding " + hiveSiteDir + " to CLASSPATH");
     File f = new File(hiveSiteDir);
-    try (URLClassLoader urlClassLoader = (URLClassLoader) ClassLoader.getSystemClassLoader()) {
+    try {
       URL u = f.toURI().toURL();
+      URLClassLoader urlClassLoader = (URLClassLoader) ClassLoader.getSystemClassLoader();
       Class<URLClassLoader> urlClass = URLClassLoader.class;
       Method method = urlClass.getDeclaredMethod("addURL", new Class[] { URL.class });
       method.setAccessible(true);
