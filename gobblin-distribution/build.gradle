@@ -45,6 +45,7 @@ dependencies {
   compile project(':gobblin-cluster')
   compile project(':gobblin-yarn')
   compile project(':gobblin-aws')
+  compile project(':gobblin-azure')
   compile project(':gobblin-service')
   compile project(':gobblin-runtime-hadoop')
 }
