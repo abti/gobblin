@@ -30,8 +30,15 @@ public class GobblinClusterConfigurationKeys {
 
   public static final String GOBBLIN_CLUSTER_PREFIX = "gobblin.cluster.";
 
+  // Task separation properties
   public static final String ENABLE_TASK_IN_SEPARATE_PROCESS =
       GOBBLIN_CLUSTER_PREFIX + "enableTaskInSeparateProcess";
+  public static final String TASK_CLASSPATH =
+      GOBBLIN_CLUSTER_PREFIX + "task.classpath";
+  public static final String TASK_LOG_CONFIG =
+      GOBBLIN_CLUSTER_PREFIX + "task.log.config";
+  public static final String TASK_JVM_OPTIONS =
+      GOBBLIN_CLUSTER_PREFIX + "task.jvm.options";
 
   // General Gobblin Cluster application configuration properties.
   public static final String APPLICATION_NAME_OPTION_NAME = "app_name";
@@ -63,6 +70,9 @@ public class GobblinClusterConfigurationKeys {
   public static final String JOB_CONF_PATH_KEY = GOBBLIN_CLUSTER_PREFIX + "job.conf.path";
   public static final String INPUT_WORK_UNIT_DIR_NAME = "_workunits";
   public static final String OUTPUT_TASK_STATE_DIR_NAME = "_taskstates";
+  // This is the directory to store job.state files when a state store is used.
+  // Note that a .job.state file is not the same thing as a .jst file.
+  public static final String JOB_STATE_DIR_NAME = "_jobstates";
   public static final String TAR_GZ_FILE_SUFFIX = ".tar.gz";
 
   // Other misc configuration properties.

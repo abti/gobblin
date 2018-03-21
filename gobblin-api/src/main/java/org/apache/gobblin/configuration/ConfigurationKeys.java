@@ -54,6 +54,9 @@ public class ConfigurationKeys {
   public static final String INTERMEDIATE_STATE_STORE_TYPE_KEY = INTERMEDIATE_STATE_STORE_PREFIX + ".state.store.type";
   public static final String DEFAULT_STATE_STORE_TYPE = "fs";
   public static final String STATE_STORE_TYPE_NOOP = "noop";
+  // are the job.state files stored using the state store?
+  public static final String JOB_STATE_IN_STATE_STORE = "state.store.jobStateInStateStore";
+  public static final boolean DEFAULT_JOB_STATE_IN_STATE_STORE = false;
 
   public static final String CONFIG_RUNTIME_PREFIX = "gobblin.config.runtime.";
   // Root directory where task state files are stored
@@ -105,6 +108,10 @@ public class ConfigurationKeys {
   public static final String SCHEDULER_WAIT_FOR_JOB_COMPLETION_KEY = "scheduler.wait.for.job.completion";
   public static final String DEFAULT_SCHEDULER_WAIT_FOR_JOB_COMPLETION = Boolean.TRUE.toString();
 
+  public static final String HELIX_JOB_TIMEOUT_ENABLED_KEY = "job.timeout.enabled";
+  public static final String DEFAULT_HELIX_JOB_TIMEOUT_ENABLED = "false";
+  public static final String HELIX_JOB_TIMEOUT_SECONDS = "job.timeout.seconds";
+  public static final String DEFAULT_HELIX_JOB_TIMEOUT_SECONDS = "10800";
 
   /**
    * Task executor and state tracker configuration properties.
@@ -162,6 +169,9 @@ public class ConfigurationKeys {
 
   public static final String WORK_UNIT_RETRY_POLICY_KEY = "workunit.retry.policy";
   public static final String WORK_UNIT_RETRY_ENABLED_KEY = "workunit.retry.enabled";
+  public static final String WORK_UNIT_CREATION_TIME_IN_MILLIS = "workunit.creation.time.in.millis";
+  public static final String WORK_UNIT_CREATION_AND_RUN_INTERVAL = "workunit.creation.and.run.interval";
+
   public static final String JOB_RUN_ONCE_KEY = "job.runonce";
   public static final String JOB_DISABLED_KEY = "job.disabled";
   public static final String JOB_JAR_FILES_KEY = "job.jars";
@@ -299,6 +309,8 @@ public class ConfigurationKeys {
   public static final String CONVERTER_AVRO_FIELD_PICK_FIELDS = "converter.avro.fields";
   public static final String CONVERTER_AVRO_JDBC_ENTRY_FIELDS_PAIRS = "converter.avro.jdbc.entry_fields_pairs";
   public static final String CONVERTER_SKIP_FAILED_RECORD = "converter.skipFailedRecord";
+  public static final String CONVERTER_AVRO_SCHEMA_KEY = "converter.avroSchema";
+  public static final String CONVERTER_IGNORE_FIELDS = "converter.ignoreFields";
 
   /**
    * Fork operator configuration properties.
@@ -449,6 +461,10 @@ public class ConfigurationKeys {
    * Configuration properties used by the extractor.
    */
   public static final String SOURCE_ENTITY = "source.entity";
+  public static final String SCHEMA_IN_SOURCE_DIR = "schema.in.source.dir";
+  public static final boolean DEFAULT_SCHEMA_IN_SOURCE_DIR = false;
+  public static final String SCHEMA_FILENAME = "schema.filename";
+  public static final String DEFAULT_SCHEMA_FILENAME = "metadata.json";
 
   // Comma-separated source entity names
   public static final String SOURCE_ENTITIES = "source.entities";
@@ -618,6 +634,8 @@ public class ConfigurationKeys {
   public static final String METRICS_REPORT_INTERVAL_KEY = METRICS_CONFIGURATIONS_PREFIX + "report.interval";
   public static final String DEFAULT_METRICS_REPORT_INTERVAL = Long.toString(TimeUnit.SECONDS.toMillis(30));
   public static final String METRIC_CONTEXT_NAME_KEY = "metrics.context.name";
+  public static final String METRIC_TIMER_WINDOW_SIZE_IN_MINUTES = METRICS_CONFIGURATIONS_PREFIX + "timer.window.size.in.minutes";
+  public static final int DEFAULT_METRIC_TIMER_WINDOW_SIZE_IN_MINUTES = 15;
 
   // File-based reporting
   public static final String METRICS_REPORTING_FILE_ENABLED_KEY =

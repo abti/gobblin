@@ -121,6 +121,7 @@ public class GobblinHelixJobLauncherTest {
                    ConfigValueFactory.fromAnyRef(testingZKServer.getConnectString()))
         .withValue(ConfigurationKeys.SOURCE_FILEBASED_FILES_TO_PULL,
             ConfigValueFactory.fromAnyRef(sourceJsonFile.getAbsolutePath()))
+        .withValue(ConfigurationKeys.JOB_STATE_IN_STATE_STORE, ConfigValueFactory.fromAnyRef("true"))
         .resolve();
 
     String zkConnectingString = baseConfig.getString(GobblinClusterConfigurationKeys.ZK_CONNECTION_STRING_KEY);
@@ -306,6 +307,9 @@ public class GobblinHelixJobLauncherTest {
 
     gobblinHelixJobLauncher.close();
 
+    // job queue deleted asynchronously after close
+    waitForQueueCleanup(taskDriver, jobName);
+
     jobContext = taskDriver.getJobContext(jobContextName);
 
     // job context should have been deleted
@@ -324,7 +328,9 @@ public class GobblinHelixJobLauncherTest {
 
     gobblinHelixJobLauncher2.close();
 
-    // job queue deleted after close
+    // job queue deleted asynchronously after close
+    waitForQueueCleanup(taskDriver, jobName2);
+
     workflowConfig  = taskDriver.getWorkflowConfig(jobName2);
     Assert.assertNull(workflowConfig);
 
@@ -339,6 +345,11 @@ public class GobblinHelixJobLauncherTest {
 
     Assert.assertFalse(workunitsDir.exists());
     Assert.assertFalse(taskstatesDir.exists());
+
+    // check that job.state file is cleaned up
+    final File jobStateFile = new File(GobblinClusterUtils.getJobStateFilePath(true, this.appWorkDir, jobIdKey).toString());
+
+    Assert.assertFalse(jobStateFile.exists());
   }
 
   @AfterClass
@@ -351,5 +362,20 @@ public class GobblinHelixJobLauncherTest {
     } finally {
       this.closer.close();
     }
+  }
+
+   private void waitForQueueCleanup(TaskDriver taskDriver, String queueName) {
+     for (int i = 0; i < 60; i++) {
+       WorkflowConfig workflowConfig  = taskDriver.getWorkflowConfig(queueName);
+
+       if (workflowConfig == null) {
+         break;
+       }
+
+       try {
+         Thread.sleep(1000);
+       } catch (InterruptedException e) {
+       }
+     }
   }
 }

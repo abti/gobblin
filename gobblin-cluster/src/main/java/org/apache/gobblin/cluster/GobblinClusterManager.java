@@ -20,7 +20,6 @@ package org.apache.gobblin.cluster;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -41,6 +40,7 @@ import org.apache.gobblin.configuration.State;
 import org.apache.gobblin.instrumented.Instrumented;
 import org.apache.gobblin.instrumented.StandardMetricsBridge;
 import org.apache.gobblin.metrics.ContextAwareHistogram;
+import org.apache.gobblin.metrics.ContextAwareMetric;
 import org.apache.gobblin.metrics.GobblinMetrics;
 import org.apache.gobblin.metrics.MetricContext;
 import org.apache.hadoop.conf.Configuration;
@@ -60,8 +60,8 @@ import org.apache.helix.messaging.handling.MessageHandler;
 import org.apache.helix.messaging.handling.MessageHandlerFactory;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.model.Message;
+import org.apache.helix.task.TargetState;
 import org.apache.helix.task.TaskDriver;
-import org.apache.helix.task.TaskUtil;
 import org.apache.helix.task.WorkflowConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -154,6 +154,9 @@ public class GobblinClusterManager implements ApplicationLauncher, StandardMetri
   private MutableJobCatalog jobCatalog;
   @Getter
   private GobblinHelixJobScheduler jobScheduler;
+  @Getter
+  private JobConfigurationManager jobConfigurationManager;
+
   private final String clusterName;
   private final Config config;
   private final MetricContext metricContext;
@@ -163,7 +166,7 @@ public class GobblinClusterManager implements ApplicationLauncher, StandardMetri
     this.clusterName = clusterName;
     this.config = config;
     this.metricContext = Instrumented.getMetricContext(ConfigUtils.configToState(config), this.getClass());
-    this.metrics = new Metrics(this.metricContext);
+    this.metrics = new Metrics(this.metricContext, this.config);
     this.isStandaloneMode = ConfigUtils.getBoolean(config, GobblinClusterConfigurationKeys.STANDALONE_CLUSTER_MODE_KEY,
         GobblinClusterConfigurationKeys.DEFAULT_STANDALONE_CLUSTER_MODE);
 
@@ -210,7 +213,8 @@ public class GobblinClusterManager implements ApplicationLauncher, StandardMetri
     this.jobScheduler = buildGobblinHelixJobScheduler(config, this.appWorkDir, getMetadataTags(clusterName, applicationId),
         schedulerService);
     this.applicationLauncher.addService(this.jobScheduler);
-    this.applicationLauncher.addService(buildJobConfigurationManager(config));
+    this.jobConfigurationManager = buildJobConfigurationManager(config);
+    this.applicationLauncher.addService(this.jobConfigurationManager);
   }
 
   /**
@@ -261,21 +265,17 @@ public class GobblinClusterManager implements ApplicationLauncher, StandardMetri
 
         // Clean up existing jobs
         TaskDriver taskDriver = new TaskDriver(this.helixManager);
-        GobblinHelixTaskDriver gobblinHelixTaskDriver = new GobblinHelixTaskDriver(this.helixManager);
         Map<String, WorkflowConfig> workflows = taskDriver.getWorkflows();
 
         for (Map.Entry<String, WorkflowConfig> entry : workflows.entrySet()) {
           String queueName = entry.getKey();
           WorkflowConfig workflowConfig = entry.getValue();
 
-          for (String namespacedJobName : workflowConfig.getJobDag().getAllNodes()) {
-            String jobName = TaskUtil.getDenamespacedJobName(queueName, namespacedJobName);
-            LOGGER.info("job {} found for queue {} ", jobName, queueName);
+          // request delete if not already requested
+          if (workflowConfig.getTargetState() != TargetState.DELETE) {
+            taskDriver.delete(queueName);
 
-            // #HELIX-0.6.7-WORKAROUND
-            // working around 0.6.7 delete job issue for queues with IN_PROGRESS state
-            gobblinHelixTaskDriver.deleteJob(queueName, jobName);
-            LOGGER.info("deleted job {} from queue {}", jobName, queueName);
+            LOGGER.info("Requested delete of queue {}", queueName);
           }
         }
 
@@ -558,21 +558,6 @@ public class GobblinClusterManager implements ApplicationLauncher, StandardMetri
     return GobblinMetrics.isEnabled(ConfigUtils.configToProperties(this.config));
   }
 
-  @Override
-  public List<Tag<?>> generateTags(State state) {
-    return ImmutableList.of();
-  }
-
-  @Override
-  public void switchMetricContext(List<Tag<?>> tags) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void switchMetricContext(MetricContext context) {
-    throw new UnsupportedOperationException();
-  }
-
   /**
    * A custom implementation of {@link LiveInstanceChangeListener}.
    */
@@ -589,18 +574,15 @@ public class GobblinClusterManager implements ApplicationLauncher, StandardMetri
   private class Metrics extends StandardMetrics {
     public static final String CLUSTER_LEADERSHIP_CHANGE = "clusterLeadershipChange";
     private ContextAwareHistogram clusterLeadershipChange;
-    public Metrics(final MetricContext metricContext) {
-      clusterLeadershipChange = metricContext.contextAwareHistogram(CLUSTER_LEADERSHIP_CHANGE, 1, TimeUnit.MINUTES);
+    public Metrics(final MetricContext metricContext, final Config config) {
+      int timeWindowSizeInMinutes = ConfigUtils.getInt(config, ConfigurationKeys.METRIC_TIMER_WINDOW_SIZE_IN_MINUTES, ConfigurationKeys.DEFAULT_METRIC_TIMER_WINDOW_SIZE_IN_MINUTES);
+      this.clusterLeadershipChange = metricContext.contextAwareHistogram(CLUSTER_LEADERSHIP_CHANGE, timeWindowSizeInMinutes, TimeUnit.MINUTES);
+      this.contextAwareMetrics.add(clusterLeadershipChange);
     }
 
     @Override
     public String getName() {
       return GobblinClusterManager.class.getName();
-    }
-
-    @Override
-    public Collection<ContextAwareHistogram> getHistograms() {
-      return ImmutableList.of(this.clusterLeadershipChange);
     }
   }
 
